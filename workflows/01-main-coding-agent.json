@@ -20,6 +20,35 @@
     },
     {
       "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "cfg-api-url",
+              "name": "apiUrl",
+              "value": "https://CHANGE_ME_API_URL",
+              "type": "string"
+            },
+            {
+              "id": "cfg-api-key",
+              "name": "apiKey",
+              "value": "CHANGE_ME_AGENT_API_KEY",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "1d07cb01-8e31-4ca6-95bf-e9805d9a0099",
+      "name": "Workflow Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -1080,
+        80
+      ]
+    },
+    {
+      "parameters": {
         "conditions": {
           "options": {
             "caseSensitive": true,
@@ -47,20 +76,20 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -940,
+        -860,
         80
       ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $vars.CODING_AGENT_API_URL + '/api/v1/runs' }}",
+        "url": "={{ $node['Workflow Config'].json.apiUrl + '/api/v1/runs' }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "X-Agent-Api-Key",
-              "value": "={{ $vars.CODING_AGENT_API_KEY }}"
+              "value": "={{ $node['Workflow Config'].json.apiKey }}"
             }
           ]
         },
@@ -87,13 +116,13 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $vars.CODING_AGENT_API_URL + '/api/v1/runs/' + $json.data.executionId + '/plan' }}",
+        "url": "={{ $node['Workflow Config'].json.apiUrl + '/api/v1/runs/' + $json.data.executionId + '/plan' }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "X-Agent-Api-Key",
-              "value": "={{ $vars.CODING_AGENT_API_KEY }}"
+              "value": "={{ $node['Workflow Config'].json.apiKey }}"
             }
           ]
         },
@@ -170,13 +199,13 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $vars.CODING_AGENT_API_URL + '/api/v1/runs/' + $node['Coding Agent Webhook'].json.body.executionId + '/human-review' }}",
+        "url": "={{ $node['Workflow Config'].json.apiUrl + '/api/v1/runs/' + $node['Coding Agent Webhook'].json.body.executionId + '/human-review' }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "X-Agent-Api-Key",
-              "value": "={{ $vars.CODING_AGENT_API_KEY }}"
+              "value": "={{ $node['Workflow Config'].json.apiKey }}"
             }
           ]
         },
@@ -236,13 +265,13 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $vars.CODING_AGENT_API_URL + '/api/v1/runs/' + $node['Coding Agent Webhook'].json.body.executionId + '/plan' }}",
+        "url": "={{ $node['Workflow Config'].json.apiUrl + '/api/v1/runs/' + $node['Coding Agent Webhook'].json.body.executionId + '/plan' }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "X-Agent-Api-Key",
-              "value": "={{ $vars.CODING_AGENT_API_KEY }}"
+              "value": "={{ $node['Workflow Config'].json.apiKey }}"
             }
           ]
         },
@@ -319,13 +348,13 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $vars.CODING_AGENT_API_URL + '/api/v1/runs/' + $node['Coding Agent Webhook'].json.body.executionId + '/code' }}",
+        "url": "={{ $node['Workflow Config'].json.apiUrl + '/api/v1/runs/' + $node['Coding Agent Webhook'].json.body.executionId + '/code' }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "X-Agent-Api-Key",
-              "value": "={{ $vars.CODING_AGENT_API_KEY }}"
+              "value": "={{ $node['Workflow Config'].json.apiKey }}"
             }
           ]
         },
@@ -352,13 +381,13 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $vars.CODING_AGENT_API_URL + '/api/v1/runs/' + $node['Coding Agent Webhook'].json.body.executionId + '/execute' }}",
+        "url": "={{ $node['Workflow Config'].json.apiUrl + '/api/v1/runs/' + $node['Coding Agent Webhook'].json.body.executionId + '/execute' }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "X-Agent-Api-Key",
-              "value": "={{ $vars.CODING_AGENT_API_KEY }}"
+              "value": "={{ $node['Workflow Config'].json.apiKey }}"
             }
           ]
         },
@@ -386,13 +415,13 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $vars.CODING_AGENT_API_URL + '/api/v1/runs/' + $node['Coding Agent Webhook'].json.body.executionId + '/review' }}",
+        "url": "={{ $node['Workflow Config'].json.apiUrl + '/api/v1/runs/' + $node['Coding Agent Webhook'].json.body.executionId + '/review' }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "X-Agent-Api-Key",
-              "value": "={{ $vars.CODING_AGENT_API_KEY }}"
+              "value": "={{ $node['Workflow Config'].json.apiKey }}"
             }
           ]
         },
@@ -473,7 +502,7 @@
       "main": [
         [
           {
-            "node": "Is Start?",
+            "node": "Workflow Config",
             "type": "main",
             "index": 0
           }
@@ -623,6 +652,17 @@
         [
           {
             "node": "Respond After Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Workflow Config": {
+      "main": [
+        [
+          {
+            "node": "Is Start?",
             "type": "main",
             "index": 0
           }
