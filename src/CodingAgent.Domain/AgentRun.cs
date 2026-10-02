@@ -27,6 +27,8 @@ public sealed class AgentRun
     public DateTimeOffset StartedAt { get; private set; }
     public DateTimeOffset Deadline { get; private set; }
     public AgentPlan? Plan { get; private set; }
+    public string? HumanFeedback { get; private set; }
+    public IReadOnlyCollection<ProjectFile> Files { get; private set; } = Array.Empty<ProjectFile>();
 
     public static AgentRun Create(
         string userRequest,
@@ -77,6 +79,77 @@ public sealed class AgentRun
             : AgentRunStatus.Coding;
     }
 
+    public void ApprovePlan(string? feedback)
+    {
+        EnsureNotExpired();
+
+        if (Status != AgentRunStatus.WaitingForHuman)
+            throw new InvalidOperationException(
+                $"Plan cannot be approved while run status is '{Status}'.");
+
+        HumanFeedback = NormalizeFeedback(feedback);
+        Status = AgentRunStatus.Coding;
+    }
+
+    public void RequestPlanModification(string feedback)
+    {
+        EnsureNotExpired();
+
+        if (Status != AgentRunStatus.WaitingForHuman)
+            throw new InvalidOperationException(
+                $"Plan modification cannot be requested while run status is '{Status}'.");
+
+        if (string.IsNullOrWhiteSpace(feedback))
+            throw new ArgumentException(
+                "Feedback is required when requesting plan modification.",
+                nameof(feedback));
+
+        HumanFeedback = feedback.Trim();
+        Status = AgentRunStatus.Planning;
+    }
+
+    public void RejectPlan(string? feedback)
+    {
+        EnsureNotExpired();
+
+        if (Status != AgentRunStatus.WaitingForHuman)
+            throw new InvalidOperationException(
+                $"Plan cannot be rejected while run status is '{Status}'.");
+
+        HumanFeedback = NormalizeFeedback(feedback);
+        Status = AgentRunStatus.Failed;
+    }
+
+    public void StartCoding()
+    {
+        EnsureNotExpired();
+
+        if (Status != AgentRunStatus.Coding)
+            throw new InvalidOperationException(
+                $"Coding cannot start while run status is '{Status}'.");
+
+        if (Plan is null)
+            throw new InvalidOperationException("Approved plan is required before coding.");
+    }
+
+    public void SetGeneratedFiles(IReadOnlyCollection<ProjectFile> files)
+    {
+        ArgumentNullException.ThrowIfNull(files);
+        EnsureNotExpired();
+
+        if (Status != AgentRunStatus.Coding)
+            throw new InvalidOperationException(
+                $"Generated files cannot be set while run status is '{Status}'.");
+
+        if (files.Count == 0)
+            throw new ArgumentException(
+                "At least one generated file is required.",
+                nameof(files));
+
+        Files = files.ToArray();
+        Status = AgentRunStatus.WaitingForExecution;
+    }
+
     private void EnsureNotExpired()
     {
         if (DateTimeOffset.UtcNow < Deadline)
@@ -85,4 +158,9 @@ public sealed class AgentRun
         Status = AgentRunStatus.TimedOut;
         throw new InvalidOperationException("The agent run has timed out.");
     }
+
+    private static string? NormalizeFeedback(string? feedback) =>
+        string.IsNullOrWhiteSpace(feedback)
+            ? null
+            : feedback.Trim();
 }
