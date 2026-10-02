@@ -26,4 +26,16 @@ public sealed class InMemoryAgentRunRepository : IAgentRunRepository
         _runs.TryGetValue(executionId, out var run);
         return Task.FromResult(run);
     }
+
+    public Task SaveAsync(
+        AgentRun run,
+        CancellationToken cancellationToken = default)
+    {
+        if (!_runs.ContainsKey(run.ExecutionId))
+            throw new KeyNotFoundException(
+                $"Run '{run.ExecutionId}' was not found.");
+
+        _runs[run.ExecutionId] = run;
+        return Task.CompletedTask;
+    }
 }
