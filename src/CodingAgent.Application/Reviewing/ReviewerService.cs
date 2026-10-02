@@ -40,6 +40,7 @@ public sealed class ReviewerService(
                 "fail");
 
             run.SetReview(ToDomain(unavailable));
+            await repository.SaveAsync(run, cancellationToken);
             return unavailable;
         }
 
@@ -90,6 +91,7 @@ Rules:
 
         Validate(response);
         run.SetReview(ToDomain(response));
+        await repository.SaveAsync(run, cancellationToken);
         return response;
     }
 
