@@ -40,6 +40,8 @@ public sealed class HumanReviewService(
                     nameof(request));
         }
 
+        await repository.SaveAsync(run, cancellationToken);
+
         return new HumanReviewResponse(
             run.ExecutionId,
             decision!,
