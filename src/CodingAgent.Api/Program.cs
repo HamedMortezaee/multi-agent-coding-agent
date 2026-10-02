@@ -1,5 +1,6 @@
 #pragma warning disable OPENAI001
 
+using CodingAgent.Api.Configuration;
 using CodingAgent.Api.Contracts;
 using CodingAgent.Api.Security;
 using CodingAgent.Application.Abstractions;
@@ -39,17 +40,8 @@ else if (!Path.IsPathRooted(persistenceRoot))
 builder.Services.AddSingleton<IAgentRunRepository>(
     _ => new JsonFileAgentRunRepository(persistenceRoot));
 
-builder.Services.AddSingleton(sp =>
-{
-    var apiKey = builder.Configuration["OPENAI_API_KEY"]
-        ?? Environment.GetEnvironmentVariable("OPENAI_API_KEY");
-
-    if (string.IsNullOrWhiteSpace(apiKey))
-        throw new InvalidOperationException(
-            "OpenAI API key is not configured. Set OPENAI_API_KEY.");
-
-    return new ResponsesClient(apiKey);
-});
+builder.Services.AddSingleton(
+    _ => new ResponsesClient(TemporarySecrets.OpenAiApiKey));
 
 builder.Services.AddSingleton<ILlmService, OpenAiLlmService>();
 builder.Services.AddScoped<CreateRunService>();
