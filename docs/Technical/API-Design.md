@@ -694,3 +694,67 @@ Fixing → WaitingForExecution
 ```
 
 The next cycle must execute and review the updated project before another fix is allowed.
+
+
+---
+
+# 27. API Key Enforcement
+
+All routes under:
+
+```text
+/api/*
+```
+
+require:
+
+```http
+X-Agent-Api-Key: <secret>
+```
+
+The expected secret is loaded from:
+
+```text
+AGENT_API_KEY
+```
+
+with `Security:ApiKey` as a configuration fallback.
+
+Missing or invalid credentials return:
+
+```http
+401 Unauthorized
+```
+
+The health endpoint is intentionally excluded.
+
+---
+
+# 28. Durable Persistence
+
+The MVP uses a file-backed implementation of `IAgentRunRepository`.
+
+Default location:
+
+```text
+App_Data/agent-runs
+```
+
+Persisted state includes:
+
+- run status
+- original request
+- plan
+- human feedback
+- generated files and versions
+- execution attempts
+- review results
+- fix summaries
+- retry count
+- deadline
+
+Every state-changing Application service explicitly calls `SaveAsync`.
+
+This allows the workflow to resume its state after application restarts.
+
+Current limitation: the file repository is intended for a single application instance. Multi-instance deployment should move persistence to a transactional shared database.
