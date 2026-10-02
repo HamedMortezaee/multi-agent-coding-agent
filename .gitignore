@@ -1,0 +1,31 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+## Visual Studio
+.vs/
+
+## Rider
+.idea/
+*.sln.iml
+
+## VS Code
+.vscode/
+
+## Build artifacts
+artifacts/
+TestResults/
+
+## Secrets
+appsettings.*.Local.json
+secrets.json
+.env
+.env.*
+
+## OS
+.DS_Store
+Thumbs.db
