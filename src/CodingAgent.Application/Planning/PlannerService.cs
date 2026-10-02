@@ -21,6 +21,7 @@ public sealed class PlannerService(
             ?? throw new KeyNotFoundException($"Run '{executionId}' was not found.");
 
         run.StartPlanning();
+        await repository.SaveAsync(run, cancellationToken);
 
         var systemPrompt = """
 You are the Planner agent of a multi-agent coding system.
@@ -85,6 +86,7 @@ User request:
         };
 
         run.SetPlan(plan);
+        await repository.SaveAsync(run, cancellationToken);
 
         return planner;
     }
