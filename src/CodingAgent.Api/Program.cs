@@ -1,6 +1,7 @@
 #pragma warning disable OPENAI001
 
 using CodingAgent.Api.Contracts;
+using CodingAgent.Api.Security;
 using CodingAgent.Application.Abstractions;
 using CodingAgent.Application.Coding;
 using CodingAgent.Application.Execution;
@@ -19,7 +20,24 @@ builder.Services.Configure<OpenAiOptions>(
     builder.Configuration.GetSection(OpenAiOptions.SectionName));
 
 builder.Services.AddSingleton(TimeProvider.System);
-builder.Services.AddSingleton<IAgentRunRepository, InMemoryAgentRunRepository>();
+var persistenceRoot = builder.Configuration["Persistence:RootPath"];
+
+if (string.IsNullOrWhiteSpace(persistenceRoot))
+{
+    persistenceRoot = Path.Combine(
+        AppContext.BaseDirectory,
+        "App_Data",
+        "agent-runs");
+}
+else if (!Path.IsPathRooted(persistenceRoot))
+{
+    persistenceRoot = Path.Combine(
+        AppContext.BaseDirectory,
+        persistenceRoot);
+}
+
+builder.Services.AddSingleton<IAgentRunRepository>(
+    _ => new JsonFileAgentRunRepository(persistenceRoot));
 
 builder.Services.AddSingleton(sp =>
 {
@@ -43,6 +61,8 @@ builder.Services.AddScoped<ReviewerService>();
 builder.Services.AddScoped<FixerService>();
 
 var app = builder.Build();
+
+app.UseMiddleware<ApiKeyMiddleware>();
 
 app.MapGet("/health", () => Results.Ok(new
 {
