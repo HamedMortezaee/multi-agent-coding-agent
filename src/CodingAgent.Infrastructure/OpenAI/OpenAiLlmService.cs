@@ -31,7 +31,7 @@ USER REQUEST:
         var response = await client.CreateResponseAsync(
             model,
             prompt,
-            cancellationToken);
+            cancellationToken: cancellationToken);
 
         return response.Value.GetOutputText();
     }
