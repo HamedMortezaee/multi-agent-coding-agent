@@ -29,3 +29,6 @@ secrets.json
 ## OS
 .DS_Store
 Thumbs.db
+
+## Runtime state
+App_Data/
