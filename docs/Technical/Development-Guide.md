@@ -8,15 +8,21 @@
 
 ## Configure OpenAI
 
-Set the API key as an environment variable.
+For the current temporary test phase, the OpenAI key is hardcoded in:
 
-PowerShell:
-
-```powershell
-$env:OPENAI_API_KEY="your-api-key"
+```text
+src/CodingAgent.Api/Configuration/TemporarySecrets.cs
 ```
 
-Do not store the API key in `appsettings.json` or commit it to GitHub.
+Replace:
+
+```csharp
+public const string OpenAiApiKey = "CHANGE_ME_OPENAI_API_KEY";
+```
+
+with your current test key before publishing.
+
+This is temporary and must be moved back to a secure secret store/environment variable before any real deployment.
 
 The model name is configuration-driven:
 
@@ -363,13 +369,29 @@ All `/api/*` endpoints require:
 X-Agent-Api-Key: <secret>
 ```
 
-Recommended configuration on the Windows Host:
+For the current temporary test phase, the backend key is hardcoded in:
 
 ```text
-AGENT_API_KEY=<strong-random-secret>
+src/CodingAgent.Api/Configuration/TemporarySecrets.cs
 ```
 
-Do not commit this value to GitHub or export it inside an n8n workflow JSON.
+Replace:
+
+```csharp
+public const string AgentApiKey = "CHANGE_ME_AGENT_API_KEY";
+```
+
+with a temporary test value.
+
+Then set the n8n variable:
+
+```text
+CODING_AGENT_API_KEY
+```
+
+to exactly the same value.
+
+Do not commit a real production secret. This hardcoded mode is only for short-lived testing.
 
 The `/health` endpoint remains public.
 
