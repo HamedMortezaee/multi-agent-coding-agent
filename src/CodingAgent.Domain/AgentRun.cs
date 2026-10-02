@@ -26,6 +26,7 @@ public sealed class AgentRun
     public int FixAttemptCount { get; private set; }
     public DateTimeOffset StartedAt { get; private set; }
     public DateTimeOffset Deadline { get; private set; }
+    public AgentPlan? Plan { get; private set; }
 
     public static AgentRun Create(
         string userRequest,
@@ -48,5 +49,40 @@ public sealed class AgentRun
             requestedBy.Trim(),
             now,
             now.Add(maxRunDuration));
+    }
+
+    public void StartPlanning()
+    {
+        EnsureNotExpired();
+
+        if (Status is not AgentRunStatus.Created and not AgentRunStatus.Planning)
+            throw new InvalidOperationException(
+                $"Run cannot enter Planning from '{Status}'.");
+
+        Status = AgentRunStatus.Planning;
+    }
+
+    public void SetPlan(AgentPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        EnsureNotExpired();
+
+        if (Status != AgentRunStatus.Planning)
+            throw new InvalidOperationException(
+                $"Plan cannot be set while run status is '{Status}'.");
+
+        Plan = plan;
+        Status = plan.RequiresHumanReview
+            ? AgentRunStatus.WaitingForHuman
+            : AgentRunStatus.Coding;
+    }
+
+    private void EnsureNotExpired()
+    {
+        if (DateTimeOffset.UtcNow < Deadline)
+            return;
+
+        Status = AgentRunStatus.TimedOut;
+        throw new InvalidOperationException("The agent run has timed out.");
     }
 }
