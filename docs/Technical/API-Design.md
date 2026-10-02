@@ -165,13 +165,14 @@ reject
 Behavior:
 
 ### approve
-Stores feedback and allows coding.
+Stores optional feedback and transitions the run to `Coding`.
 
 ### modify
-Returns the run to planning with the human feedback.
+Requires non-empty feedback and transitions the run back to `Planning`.
+The Planner endpoint can then be called again.
 
 ### reject
-Marks the run as failed/cancelled according to final implementation policy.
+Stores optional feedback and transitions the run to `Failed`.
 
 ---
 
@@ -216,6 +217,8 @@ State transition:
 ```text
 WaitingForHuman → Coding → WaitingForExecution
 ```
+
+The generated files are stored in the current run state and are visible from `GET /api/v1/runs/{executionId}`.
 
 ---
 
