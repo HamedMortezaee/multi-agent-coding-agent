@@ -2,11 +2,12 @@
 
 using CodingAgent.Api.Contracts;
 using CodingAgent.Application.Abstractions;
+using CodingAgent.Application.Coding;
+using CodingAgent.Application.HumanReview;
 using CodingAgent.Application.Planning;
 using CodingAgent.Application.Runs.CreateRun;
 using CodingAgent.Infrastructure.OpenAI;
 using CodingAgent.Infrastructure.Persistence;
-using Microsoft.Extensions.Options;
 using OpenAI.Responses;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -32,6 +33,8 @@ builder.Services.AddSingleton(sp =>
 builder.Services.AddSingleton<ILlmService, OpenAiLlmService>();
 builder.Services.AddScoped<CreateRunService>();
 builder.Services.AddScoped<PlannerService>();
+builder.Services.AddScoped<HumanReviewService>();
+builder.Services.AddScoped<CoderService>();
 
 var app = builder.Build();
 
@@ -60,17 +63,7 @@ app.MapPost("/api/v1/runs", async (
     }
     catch (ArgumentException exception)
     {
-        return Results.BadRequest(
-            new ApiResponse<object>(
-                false,
-                null,
-                new[]
-                {
-                    new ApiError(
-                        "VALIDATION_ERROR",
-                        exception.Message)
-                },
-                new ApiMeta(null, DateTimeOffset.UtcNow)));
+        return ValidationError(null, exception.Message);
     }
 });
 
@@ -82,19 +75,7 @@ app.MapGet("/api/v1/runs/{executionId:guid}", async (
     var run = await repository.GetAsync(executionId, cancellationToken);
 
     if (run is null)
-    {
-        return Results.NotFound(
-            new ApiResponse<object>(
-                false,
-                null,
-                new[]
-                {
-                    new ApiError(
-                        "RUN_NOT_FOUND",
-                        $"Run '{executionId}' was not found.")
-                },
-                new ApiMeta(executionId, DateTimeOffset.UtcNow)));
-    }
+        return RunNotFound(executionId);
 
     var data = new
     {
@@ -105,7 +86,9 @@ app.MapGet("/api/v1/runs/{executionId:guid}", async (
         run.FixAttemptCount,
         run.StartedAt,
         run.Deadline,
-        run.Plan
+        run.Plan,
+        run.HumanFeedback,
+        run.Files
     };
 
     return Results.Ok(
@@ -134,36 +117,141 @@ app.MapPost("/api/v1/runs/{executionId:guid}/plan", async (
                 Array.Empty<ApiError>(),
                 new ApiMeta(executionId, DateTimeOffset.UtcNow)));
     }
-    catch (KeyNotFoundException exception)
+    catch (KeyNotFoundException)
     {
-        return Results.NotFound(
-            new ApiResponse<object>(
-                false,
-                null,
-                new[]
-                {
-                    new ApiError(
-                        "RUN_NOT_FOUND",
-                        exception.Message)
-                },
-                new ApiMeta(executionId, DateTimeOffset.UtcNow)));
+        return RunNotFound(executionId);
     }
     catch (InvalidOperationException exception)
     {
-        return Results.UnprocessableEntity(
-            new ApiResponse<object>(
-                false,
-                null,
-                new[]
-                {
-                    new ApiError(
-                        "PLANNER_ERROR",
-                        exception.Message)
-                },
+        return DomainError(
+            executionId,
+            "PLANNER_ERROR",
+            exception.Message);
+    }
+});
+
+app.MapPost("/api/v1/runs/{executionId:guid}/human-review", async (
+    Guid executionId,
+    HumanReviewRequest request,
+    HumanReviewService service,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var result = await service.ExecuteAsync(
+            executionId,
+            request,
+            cancellationToken);
+
+        return Results.Ok(
+            new ApiResponse<HumanReviewResponse>(
+                true,
+                result,
+                Array.Empty<ApiError>(),
                 new ApiMeta(executionId, DateTimeOffset.UtcNow)));
+    }
+    catch (KeyNotFoundException)
+    {
+        return RunNotFound(executionId);
+    }
+    catch (ArgumentException exception)
+    {
+        return ValidationError(executionId, exception.Message);
+    }
+    catch (InvalidOperationException exception)
+    {
+        return ConflictError(
+            executionId,
+            "INVALID_RUN_STATE",
+            exception.Message);
+    }
+});
+
+app.MapPost("/api/v1/runs/{executionId:guid}/code", async (
+    Guid executionId,
+    CoderService service,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var result = await service.ExecuteAsync(
+            executionId,
+            cancellationToken);
+
+        return Results.Ok(
+            new ApiResponse<CoderResponse>(
+                true,
+                result,
+                Array.Empty<ApiError>(),
+                new ApiMeta(executionId, DateTimeOffset.UtcNow)));
+    }
+    catch (KeyNotFoundException)
+    {
+        return RunNotFound(executionId);
+    }
+    catch (InvalidOperationException exception)
+    {
+        return DomainError(
+            executionId,
+            "CODER_ERROR",
+            exception.Message);
     }
 });
 
 app.Run();
+
+static IResult RunNotFound(Guid executionId) =>
+    Results.NotFound(
+        new ApiResponse<object>(
+            false,
+            null,
+            new[]
+            {
+                new ApiError(
+                    "RUN_NOT_FOUND",
+                    $"Run '{executionId}' was not found.")
+            },
+            new ApiMeta(executionId, DateTimeOffset.UtcNow)));
+
+static IResult ValidationError(Guid? executionId, string message) =>
+    Results.BadRequest(
+        new ApiResponse<object>(
+            false,
+            null,
+            new[]
+            {
+                new ApiError(
+                    "VALIDATION_ERROR",
+                    message)
+            },
+            new ApiMeta(executionId, DateTimeOffset.UtcNow)));
+
+static IResult ConflictError(
+    Guid executionId,
+    string code,
+    string message) =>
+    Results.Conflict(
+        new ApiResponse<object>(
+            false,
+            null,
+            new[]
+            {
+                new ApiError(code, message)
+            },
+            new ApiMeta(executionId, DateTimeOffset.UtcNow)));
+
+static IResult DomainError(
+    Guid executionId,
+    string code,
+    string message) =>
+    Results.UnprocessableEntity(
+        new ApiResponse<object>(
+            false,
+            null,
+            new[]
+            {
+                new ApiError(code, message)
+            },
+            new ApiMeta(executionId, DateTimeOffset.UtcNow)));
 
 public partial class Program;
