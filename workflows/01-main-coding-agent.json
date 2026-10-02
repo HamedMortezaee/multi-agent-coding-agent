@@ -1,0 +1,643 @@
+{
+  "name": "Multi-Agent Coding Agent - Main",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "coding-agent",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "1d07cb01-8e31-4ca6-95bf-e9805d9a0001",
+      "name": "Coding Agent Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1160,
+        80
+      ],
+      "webhookId": "b12be4cc-668a-43cc-91cc-4f7c1b1d5412"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-start",
+              "leftValue": "={{ $json.body.action }}",
+              "rightValue": "start",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "1d07cb01-8e31-4ca6-95bf-e9805d9a0002",
+      "name": "Is Start?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -940,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.CODING_AGENT_API_URL + '/api/v1/runs' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Agent-Api-Key",
+              "value": "={{ $vars.CODING_AGENT_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { request: $node['Coding Agent Webhook'].json.body.request, requestedBy: $node['Coding Agent Webhook'].json.body.requestedBy || 'n8n' } }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "1d07cb01-8e31-4ca6-95bf-e9805d9a0003",
+      "name": "Create Run",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -700,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.CODING_AGENT_API_URL + '/api/v1/runs/' + $json.data.executionId + '/plan' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Agent-Api-Key",
+              "value": "={{ $vars.CODING_AGENT_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {} }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "1d07cb01-8e31-4ca6-95bf-e9805d9a0004",
+      "name": "Generate Plan",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -460,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, executionId: $node['Create Run'].json.data.executionId, status: 'WaitingForHuman', plan: $json.data, nextAction: 'review', reviewRequest: { action: 'review', executionId: $node['Create Run'].json.data.executionId, decision: 'approve | modify | reject', feedback: 'optional for approve/reject; required for modify' } } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "1d07cb01-8e31-4ca6-95bf-e9805d9a0005",
+      "name": "Respond With Plan",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        -220,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-review",
+              "leftValue": "={{ $node['Coding Agent Webhook'].json.body.action }}",
+              "rightValue": "review",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "1d07cb01-8e31-4ca6-95bf-e9805d9a0006",
+      "name": "Is Review?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -700,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.CODING_AGENT_API_URL + '/api/v1/runs/' + $node['Coding Agent Webhook'].json.body.executionId + '/human-review' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Agent-Api-Key",
+              "value": "={{ $vars.CODING_AGENT_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { decision: $node['Coding Agent Webhook'].json.body.decision, feedback: $node['Coding Agent Webhook'].json.body.feedback || null } }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "1d07cb01-8e31-4ca6-95bf-e9805d9a0007",
+      "name": "Submit Human Review",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -460,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-modify",
+              "leftValue": "={{ $node['Coding Agent Webhook'].json.body.decision }}",
+              "rightValue": "modify",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "1d07cb01-8e31-4ca6-95bf-e9805d9a0008",
+      "name": "Is Modify?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -220,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.CODING_AGENT_API_URL + '/api/v1/runs/' + $node['Coding Agent Webhook'].json.body.executionId + '/plan' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Agent-Api-Key",
+              "value": "={{ $vars.CODING_AGENT_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {} }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "1d07cb01-8e31-4ca6-95bf-e9805d9a0009",
+      "name": "Replan With Feedback",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        20,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, executionId: $node['Coding Agent Webhook'].json.body.executionId, status: 'WaitingForHuman', plan: $json.data, message: 'Plan revised using human feedback. Submit another review request.' } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "1d07cb01-8e31-4ca6-95bf-e9805d9a0010",
+      "name": "Respond With Revised Plan",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        260,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-approve",
+              "leftValue": "={{ $node['Coding Agent Webhook'].json.body.decision }}",
+              "rightValue": "approve",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "1d07cb01-8e31-4ca6-95bf-e9805d9a0011",
+      "name": "Is Approve?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        20,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.CODING_AGENT_API_URL + '/api/v1/runs/' + $node['Coding Agent Webhook'].json.body.executionId + '/code' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Agent-Api-Key",
+              "value": "={{ $vars.CODING_AGENT_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {} }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "1d07cb01-8e31-4ca6-95bf-e9805d9a0012",
+      "name": "Generate Code",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        260,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.CODING_AGENT_API_URL + '/api/v1/runs/' + $node['Coding Agent Webhook'].json.body.executionId + '/execute' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Agent-Api-Key",
+              "value": "={{ $vars.CODING_AGENT_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { command: 'dotnet test', timeoutSeconds: 60 } }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "1d07cb01-8e31-4ca6-95bf-e9805d9a0013",
+      "name": "Execute Project",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        500,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.CODING_AGENT_API_URL + '/api/v1/runs/' + $node['Coding Agent Webhook'].json.body.executionId + '/review' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Agent-Api-Key",
+              "value": "={{ $vars.CODING_AGENT_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {} }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "1d07cb01-8e31-4ca6-95bf-e9805d9a0014",
+      "name": "Review Result",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        740,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: $json.success, executionId: $node['Coding Agent Webhook'].json.body.executionId, codeGeneration: $node['Generate Code'].json, execution: $node['Execute Project'].json, review: $json.data, note: 'With the current environment, execution is expected to end as EXECUTION_UNAVAILABLE until a real runner is configured.' } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "1d07cb01-8e31-4ca6-95bf-e9805d9a0015",
+      "name": "Respond After Review",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        980,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, executionId: $node['Coding Agent Webhook'].json.body.executionId, status: $node['Submit Human Review'].json.data.status, decision: $node['Coding Agent Webhook'].json.body.decision, message: 'Run stopped by human review.' } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "1d07cb01-8e31-4ca6-95bf-e9805d9a0016",
+      "name": "Respond Rejected",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        260,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: false, error: 'INVALID_ACTION', message: \"body.action must be 'start' or 'review'.\" } }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "1d07cb01-8e31-4ca6-95bf-e9805d9a0017",
+      "name": "Respond Invalid Action",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        -460,
+        500
+      ]
+    }
+  ],
+  "connections": {
+    "Coding Agent Webhook": {
+      "main": [
+        [
+          {
+            "node": "Is Start?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Start?": {
+      "main": [
+        [
+          {
+            "node": "Create Run",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is Review?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Run": {
+      "main": [
+        [
+          {
+            "node": "Generate Plan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Plan": {
+      "main": [
+        [
+          {
+            "node": "Respond With Plan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Review?": {
+      "main": [
+        [
+          {
+            "node": "Submit Human Review",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Invalid Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Submit Human Review": {
+      "main": [
+        [
+          {
+            "node": "Is Modify?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Modify?": {
+      "main": [
+        [
+          {
+            "node": "Replan With Feedback",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is Approve?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Replan With Feedback": {
+      "main": [
+        [
+          {
+            "node": "Respond With Revised Plan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Approve?": {
+      "main": [
+        [
+          {
+            "node": "Generate Code",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Rejected",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Code": {
+      "main": [
+        [
+          {
+            "node": "Execute Project",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Project": {
+      "main": [
+        [
+          {
+            "node": "Review Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Review Result": {
+      "main": [
+        [
+          {
+            "node": "Respond After Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "versionId": "8d78b849-6f0e-4b2a-9a7a-2d4bbf57cae1",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": []
+}
