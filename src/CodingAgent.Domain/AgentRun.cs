@@ -31,6 +31,35 @@ public sealed class AgentRun
     public IReadOnlyCollection<ProjectFile> Files { get; private set; } = Array.Empty<ProjectFile>();
     public IReadOnlyCollection<ExecutionAttempt> Attempts { get; private set; } = Array.Empty<ExecutionAttempt>();
 
+    public static AgentRun Restore(
+        Guid executionId,
+        string userRequest,
+        string requestedBy,
+        AgentRunStatus status,
+        int fixAttemptCount,
+        DateTimeOffset startedAt,
+        DateTimeOffset deadline,
+        AgentPlan? plan,
+        string? humanFeedback,
+        IReadOnlyCollection<ProjectFile>? files,
+        IReadOnlyCollection<ExecutionAttempt>? attempts)
+    {
+        return new AgentRun(
+            executionId,
+            userRequest,
+            requestedBy,
+            startedAt,
+            deadline)
+        {
+            Status = status,
+            FixAttemptCount = fixAttemptCount,
+            Plan = plan,
+            HumanFeedback = humanFeedback,
+            Files = files?.ToArray() ?? Array.Empty<ProjectFile>(),
+            Attempts = attempts?.ToArray() ?? Array.Empty<ExecutionAttempt>()
+        };
+    }
+
     public static AgentRun Create(
         string userRequest,
         string requestedBy,
