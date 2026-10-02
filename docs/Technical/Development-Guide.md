@@ -45,7 +45,9 @@ Health endpoint:
 GET /health
 ```
 
-## Create a Run
+---
+
+## Step 1 — Create a Run
 
 ```http
 POST /api/v1/runs
@@ -57,9 +59,11 @@ Content-Type: application/json
 }
 ```
 
-The response contains `executionId`.
+Save the returned `executionId`.
 
-## Generate the Plan
+---
+
+## Step 2 — Generate the Plan
 
 ```http
 POST /api/v1/runs/{executionId}/plan
@@ -68,13 +72,102 @@ Content-Type: application/json
 {}
 ```
 
-The Planner calls OpenAI, validates the returned JSON, stores the resulting plan in the run state, and transitions the run to:
+Current MVP transition:
 
 ```text
+Created
+  ↓
+Planning
+  ↓
 WaitingForHuman
 ```
 
-for the current MVP.
+---
+
+## Step 3 — Human Review
+
+### Approve
+
+```http
+POST /api/v1/runs/{executionId}/human-review
+Content-Type: application/json
+
+{
+  "decision": "approve",
+  "feedback": "Add Swagger documentation."
+}
+```
+
+Transition:
+
+```text
+WaitingForHuman → Coding
+```
+
+### Request Plan Modification
+
+```json
+{
+  "decision": "modify",
+  "feedback": "Keep persistence in-memory for the MVP."
+}
+```
+
+Transition:
+
+```text
+WaitingForHuman → Planning
+```
+
+After this, call the Planner endpoint again. The stored human feedback is available in run state.
+
+### Reject
+
+```json
+{
+  "decision": "reject",
+  "feedback": "Scope rejected."
+}
+```
+
+Transition:
+
+```text
+WaitingForHuman → Failed
+```
+
+---
+
+## Step 4 — Generate Code
+
+After approval:
+
+```http
+POST /api/v1/runs/{executionId}/code
+Content-Type: application/json
+
+{}
+```
+
+Coder receives:
+
+- original user request
+- approved plan
+- human feedback
+
+and returns structured project files.
+
+Transition:
+
+```text
+Coding
+  ↓
+WaitingForExecution
+```
+
+The files are also stored in the current run state.
+
+---
 
 ## Get Run State
 
@@ -82,11 +175,45 @@ for the current MVP.
 GET /api/v1/runs/{executionId}
 ```
 
-The response includes the current status and generated plan when available.
+Current state response includes:
+
+- request
+- status
+- plan
+- human feedback
+- generated files
+- fix attempt count
+- deadline
+
+---
+
+## Current End-to-End Backend Flow
+
+```text
+POST /runs
+    ↓
+POST /plan
+    ↓
+WaitingForHuman
+    ↓
+POST /human-review
+    ↓
+Coding
+    ↓
+POST /code
+    ↓
+WaitingForExecution
+```
+
+The next implementation phase will add the execution contract endpoint, Tester/Reviewer and Fixer loop.
 
 ## Current Persistence
 
-The current repository is intentionally in-memory for the bootstrap phase. Persistent state storage will be introduced before the complete n8n workflow is connected.
+The current repository is intentionally in-memory for the bootstrap phase.
+
+Important: restarting the ASP.NET Core application currently clears all run state.
+
+Persistent state storage must be added before production-like n8n testing.
 
 ## Current Execution Limitation
 
