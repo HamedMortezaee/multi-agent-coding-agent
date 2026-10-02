@@ -395,3 +395,70 @@ Max Run Time: 15 minutes
 Report: Markdown
 MVP Target: ASP.NET Core Todo API
 ```
+
+
+---
+
+# ADR-019 — File-backed State Persistence for MVP
+
+## Status
+Accepted
+
+## Context
+The Windows host can run the ASP.NET Core API, but no external database has been selected yet. In-memory state would be lost whenever the application restarts.
+
+## Decision
+Use a JSON file-backed implementation of `IAgentRunRepository` for the MVP.
+
+Default path:
+
+```text
+App_Data/agent-runs
+```
+
+Each run is persisted by `ExecutionId`.
+
+Application services explicitly call `SaveAsync` after state transitions.
+
+## Consequences
+
+### Positive
+- survives application restarts
+- no external database dependency
+- works with current Windows-host deployment model
+- repository abstraction allows later migration to SQL Server/PostgreSQL
+
+### Negative
+- Windows host must allow write access to the persistence directory
+- intended for a single application instance
+- concurrent updates use process-local locking rather than distributed transactions
+
+---
+
+# ADR-020 — API Key Authentication between n8n and Backend
+
+## Status
+Accepted
+
+## Context
+The ASP.NET Core endpoints will be reachable over the internet from n8nir.ir and must not be callable anonymously.
+
+## Decision
+Protect all `/api/*` endpoints using:
+
+```http
+X-Agent-Api-Key
+```
+
+The secret is read primarily from:
+
+```text
+AGENT_API_KEY
+```
+
+The health endpoint remains anonymous.
+
+The API key is never committed to GitHub or embedded in exported n8n workflow JSON.
+
+## Future
+The API-key mechanism can later be replaced with stronger service-to-service authentication without changing Agent domain logic.
