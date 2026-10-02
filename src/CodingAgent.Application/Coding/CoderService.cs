@@ -21,6 +21,7 @@ public sealed class CoderService(
             ?? throw new KeyNotFoundException($"Run '{executionId}' was not found.");
 
         run.StartCoding();
+        await repository.SaveAsync(run, cancellationToken);
 
         if (run.Plan is null)
             throw new InvalidOperationException("Approved plan is required before coding.");
@@ -88,6 +89,7 @@ Human feedback:
             .ToArray();
 
         run.SetGeneratedFiles(files);
+        await repository.SaveAsync(run, cancellationToken);
 
         return result;
     }
