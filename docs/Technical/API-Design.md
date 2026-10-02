@@ -615,3 +615,82 @@ POST /api/v1/runs/{id}/cancel
 ```
 
 These are intentionally excluded from the MVP.
+
+
+---
+
+# 24. Implemented Execution Behavior
+
+The execution endpoint and state transitions are implemented.
+
+Current backend behavior without a runner:
+
+```text
+WaitingForExecution
+  ↓
+POST /execute
+  ↓
+Executing
+  ↓
+ExecutionAttempt recorded
+  ↓
+Reviewing
+```
+
+The HTTP response is currently:
+
+```text
+503 Service Unavailable
+EXECUTION_UNAVAILABLE
+```
+
+This response is a known environment limitation, not a generated-code failure.
+
+The n8n workflow should preserve the `executionId` and continue to the Review step when handling this known response so that a controlled final result/report can be produced.
+
+---
+
+# 25. Reviewer Behavior for Infrastructure Failure
+
+If the latest execution result has:
+
+```json
+{
+  "available": false,
+  "reason": "EXECUTION_UNAVAILABLE"
+}
+```
+
+Reviewer does not call the LLM.
+
+It deterministically produces:
+
+```json
+{
+  "success": false,
+  "summary": "Generated code could not be executed because no runner is configured.",
+  "nextAction": "fail"
+}
+```
+
+This prevents the Fixer from trying to repair source code for an infrastructure problem.
+
+---
+
+# 26. Fix Retry Enforcement
+
+Backend owns the retry counter.
+
+```text
+MaxFixAttempts = 3
+```
+
+Each successful entry into Fixer increments `FixAttemptCount`.
+
+After applying a fix:
+
+```text
+Fixing → WaitingForExecution
+```
+
+The next cycle must execute and review the updated project before another fix is allowed.
