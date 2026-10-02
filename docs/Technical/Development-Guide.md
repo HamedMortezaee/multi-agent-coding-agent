@@ -205,7 +205,140 @@ POST /code
 WaitingForExecution
 ```
 
-The next implementation phase will add the execution contract endpoint, Tester/Reviewer and Fixer loop.
+## Step 5 — Execute
+
+```http
+POST /api/v1/runs/{executionId}/execute
+Content-Type: application/json
+
+{
+  "command": "dotnet test",
+  "timeoutSeconds": 60
+}
+```
+
+The execution contract is now implemented.
+
+Because no sandbox/runner is currently configured, the endpoint intentionally returns:
+
+```text
+HTTP 503
+EXECUTION_UNAVAILABLE
+```
+
+The failed infrastructure attempt is still recorded in run state and the run moves to `Reviewing`.
+
+---
+
+## Step 6 — Review
+
+```http
+POST /api/v1/runs/{executionId}/review
+Content-Type: application/json
+
+{}
+```
+
+Current behavior without a runner:
+
+```text
+Reviewing
+  ↓
+ExecutionUnavailable
+  ↓
+Failed
+```
+
+This is intentional: an infrastructure blocker must not be treated as a code bug.
+
+When a real runner is added and execution produces build/test results, Reviewer can choose:
+
+```text
+complete
+fix
+fail
+```
+
+---
+
+## Step 7 — Fix
+
+When Reviewer returns `nextAction = fix`:
+
+```http
+POST /api/v1/runs/{executionId}/fix
+Content-Type: application/json
+
+{}
+```
+
+Fixer receives:
+
+- approved plan
+- human feedback
+- current files
+- latest real execution result
+- latest review
+- previous attempts
+
+It applies structured create/update/delete changes and returns the run to:
+
+```text
+WaitingForExecution
+```
+
+Maximum fix attempts:
+
+```text
+3
+```
+
+After each fix the flow is:
+
+```text
+Fix
+ ↓
+Execute
+ ↓
+Review
+ ↓
+Fix (if required)
+```
+
+---
+
+## Attempt History
+
+```http
+GET /api/v1/runs/{executionId}/attempts
+```
+
+This returns execution results, reviews and fix summaries for previous attempts.
+
+---
+
+## Current End-to-End Backend Flow
+
+```text
+Create
+ ↓
+Plan
+ ↓
+Human Review
+ ↓
+Code
+ ↓
+Execute
+ ↓
+Review
+ ├── Complete
+ ├── Failed
+ └── Fix
+      ↓
+    Execute
+```
+
+Without a runner, the current flow ends as a controlled `Failed` state after Reviewer identifies `EXECUTION_UNAVAILABLE`.
 
 ## Current Persistence
 
