@@ -23,6 +23,7 @@ public sealed class FixerService(
             ?? throw new KeyNotFoundException($"Run '{executionId}' was not found.");
 
         run.StartFix(MaxFixAttempts);
+        await repository.SaveAsync(run, cancellationToken);
 
         var attemptNumber = run.FixAttemptCount;
 
@@ -87,6 +88,7 @@ Rules:
                 change.Content,
                 change.Reason)).ToArray(),
             payload.Summary);
+        await repository.SaveAsync(run, cancellationToken);
 
         return new FixerResponse(
             attemptNumber,
