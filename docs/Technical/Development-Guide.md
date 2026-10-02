@@ -351,3 +351,64 @@ Persistent state storage must be added before production-like n8n testing.
 ## Current Execution Limitation
 
 Real generated-code execution is not implemented because no sandbox/runner is currently available.
+
+
+---
+
+## Configure Backend API Key
+
+All `/api/*` endpoints require:
+
+```http
+X-Agent-Api-Key: <secret>
+```
+
+Recommended configuration on the Windows Host:
+
+```text
+AGENT_API_KEY=<strong-random-secret>
+```
+
+Do not commit this value to GitHub or export it inside an n8n workflow JSON.
+
+The `/health` endpoint remains public.
+
+---
+
+## Durable Run State
+
+Run state is now persisted as JSON under:
+
+```text
+App_Data/agent-runs
+```
+
+Each execution is stored separately by `ExecutionId`.
+
+Example:
+
+```text
+App_Data/
+└── agent-runs/
+    └── 49fb20b78b644e26aaf978d99215b419.json
+```
+
+State survives an ASP.NET Core application restart.
+
+The Windows hosting process must have write permission to the configured persistence directory.
+
+The path can be changed using:
+
+```json
+{
+  "Persistence": {
+    "RootPath": "App_Data/agent-runs"
+  }
+}
+```
+
+The repository writes through a temporary file and replaces the target file, reducing the chance of leaving a partially-written state file.
+
+### Hosting Constraint
+
+If the Windows host does not allow file writes, replace `JsonFileAgentRunRepository` with another `IAgentRunRepository` implementation such as SQL Server/PostgreSQL without changing Agent services or n8n contracts.
