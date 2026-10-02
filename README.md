@@ -22,6 +22,8 @@ A multi-agent coding assistant orchestrated with **n8n**, backed by **ASP.NET Co
 
 - `docs/ADR/ADR-001-Architecture-Decisions.md`
 - `docs/SDD/Software-Design-Document.md`
+- `docs/Technical/Agent-Contracts.md`
+- `docs/Technical/API-Design.md`
 
 ## Repository Structure
 
