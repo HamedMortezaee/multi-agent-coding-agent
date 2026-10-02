@@ -29,6 +29,7 @@ public sealed class AgentRun
     public AgentPlan? Plan { get; private set; }
     public string? HumanFeedback { get; private set; }
     public IReadOnlyCollection<ProjectFile> Files { get; private set; } = Array.Empty<ProjectFile>();
+    public IReadOnlyCollection<ExecutionAttempt> Attempts { get; private set; } = Array.Empty<ExecutionAttempt>();
 
     public static AgentRun Create(
         string userRequest,
@@ -147,6 +148,161 @@ public sealed class AgentRun
                 nameof(files));
 
         Files = files.ToArray();
+        Status = AgentRunStatus.WaitingForExecution;
+    }
+
+    public void StartExecution()
+    {
+        EnsureNotExpired();
+
+        if (Status != AgentRunStatus.WaitingForExecution)
+            throw new InvalidOperationException(
+                $"Execution cannot start while run status is '{Status}'.");
+
+        Status = AgentRunStatus.Executing;
+    }
+
+    public void RecordExecutionAttempt(
+        DateTimeOffset startedAt,
+        DateTimeOffset completedAt,
+        ExecutionResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        if (Status != AgentRunStatus.Executing)
+            throw new InvalidOperationException(
+                $"Execution result cannot be recorded while run status is '{Status}'.");
+
+        var attempts = Attempts.ToList();
+        attempts.Add(new ExecutionAttempt
+        {
+            AttemptNumber = attempts.Count + 1,
+            StartedAt = startedAt,
+            CompletedAt = completedAt,
+            ExecutionResult = result
+        });
+
+        Attempts = attempts;
+        Status = AgentRunStatus.Reviewing;
+    }
+
+    public ExecutionAttempt GetLatestAttempt()
+    {
+        return Attempts.LastOrDefault()
+            ?? throw new InvalidOperationException("No execution attempt is available.");
+    }
+
+    public void StartReview()
+    {
+        EnsureNotExpired();
+
+        if (Status != AgentRunStatus.Reviewing)
+            throw new InvalidOperationException(
+                $"Review cannot start while run status is '{Status}'.");
+    }
+
+    public void SetReview(ReviewResult review)
+    {
+        ArgumentNullException.ThrowIfNull(review);
+
+        if (Status != AgentRunStatus.Reviewing)
+            throw new InvalidOperationException(
+                $"Review cannot be saved while run status is '{Status}'.");
+
+        GetLatestAttempt().Review = review;
+
+        Status = review.NextAction switch
+        {
+            "complete" when review.Success => AgentRunStatus.Completed,
+            "fix" => AgentRunStatus.Fixing,
+            "fail" => AgentRunStatus.Failed,
+            _ => throw new InvalidOperationException(
+                $"Unsupported review action '{review.NextAction}'.")
+        };
+    }
+
+    public void StartFix(int maxFixAttempts)
+    {
+        EnsureNotExpired();
+
+        if (Status != AgentRunStatus.Fixing)
+            throw new InvalidOperationException(
+                $"Fix cannot start while run status is '{Status}'.");
+
+        if (FixAttemptCount >= maxFixAttempts)
+        {
+            Status = AgentRunStatus.Failed;
+            throw new InvalidOperationException("Maximum fix attempts reached.");
+        }
+
+        FixAttemptCount++;
+    }
+
+    public void ApplyFix(
+        IReadOnlyCollection<ProjectFileChange> changes,
+        string summary)
+    {
+        ArgumentNullException.ThrowIfNull(changes);
+
+        if (Status != AgentRunStatus.Fixing)
+            throw new InvalidOperationException(
+                $"Fix cannot be applied while run status is '{Status}'.");
+
+        if (changes.Count == 0)
+            throw new ArgumentException(
+                "At least one file change is required.",
+                nameof(changes));
+
+        var files = Files.ToDictionary(
+            file => file.Path,
+            StringComparer.OrdinalIgnoreCase);
+
+        foreach (var change in changes)
+        {
+            if (change.Operation == "create")
+            {
+                if (files.ContainsKey(change.Path))
+                    throw new InvalidOperationException(
+                        $"Cannot create existing file '{change.Path}'.");
+
+                files[change.Path] = new ProjectFile
+                {
+                    Path = change.Path,
+                    Content = change.Content,
+                    Version = 1
+                };
+            }
+            else if (change.Operation == "update")
+            {
+                if (!files.TryGetValue(change.Path, out var currentFile))
+                    throw new InvalidOperationException(
+                        $"Cannot update missing file '{change.Path}'.");
+
+                files[change.Path] = new ProjectFile
+                {
+                    Path = change.Path,
+                    Content = change.Content,
+                    Version = currentFile.Version + 1
+                };
+            }
+            else if (change.Operation == "delete")
+            {
+                if (!files.Remove(change.Path))
+                    throw new InvalidOperationException(
+                        $"Cannot delete missing file '{change.Path}'.");
+            }
+            else
+            {
+                throw new InvalidOperationException(
+                    $"Unsupported file operation '{change.Operation}'.");
+            }
+        }
+
+        Files = files.Values
+            .OrderBy(file => file.Path, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        GetLatestAttempt().FixSummary = summary;
         Status = AgentRunStatus.WaitingForExecution;
     }
 
