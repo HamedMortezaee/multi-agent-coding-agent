@@ -57,6 +57,11 @@ Rules:
         var userPrompt = $"""
 User request:
 {run.UserRequest}
+
+Human feedback from previous review:
+{run.HumanFeedback ?? "(none)"}
+
+If human feedback exists, revise the plan to address it explicitly.
 """;
 
         var raw = await llmService.GenerateTextAsync(
