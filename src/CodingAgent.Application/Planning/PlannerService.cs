@@ -22,6 +22,7 @@ public sealed class PlannerService(
 
         run.StartPlanning();
         await repository.SaveAsync(run, cancellationToken);
+        await repository.SaveAsync(run, cancellationToken);
 
         var systemPrompt = """
 You are the Planner agent of a multi-agent coding system.
