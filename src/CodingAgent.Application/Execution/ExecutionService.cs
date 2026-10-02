@@ -20,6 +20,7 @@ public sealed class ExecutionService(
                 "TimeoutSeconds must be greater than zero.");
 
         run.StartExecution();
+        await repository.SaveAsync(run, cancellationToken);
 
         var startedAt = DateTimeOffset.UtcNow;
 
@@ -35,6 +36,7 @@ public sealed class ExecutionService(
 
         var completedAt = DateTimeOffset.UtcNow;
         run.RecordExecutionAttempt(startedAt, completedAt, result);
+        await repository.SaveAsync(run, cancellationToken);
 
         return new ExecutionResponse(
             result.Available,
