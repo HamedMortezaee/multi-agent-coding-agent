@@ -131,10 +131,13 @@ app.MapGet("/api/v1/diagnostics/runner", (
 
     return Results.Ok(new
     {
+        diagnosticsVersion = "runner-diag-v2",
         configured = !string.IsNullOrWhiteSpace(configuredBaseUrl),
         baseUrl = configuredBaseUrl,
         allowInvalidCertificate = runnerAllowInvalidCertificate,
-        implementation = executionSandbox.GetType().Name
+        implementation = executionSandbox.GetType().Name,
+        implementationAssembly = executionSandbox.GetType().Assembly.GetName().Name,
+        implementationAssemblyLocation = executionSandbox.GetType().Assembly.Location
     });
 });
 
