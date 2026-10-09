@@ -462,7 +462,7 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ { success: true, executionId: $node['Parse Incoming Request'].json.executionId, status: $node['Generate Final Report'].json.data.status, codeGenerated: true, executionAvailable: $node['Execute Project'].json.data?.available ?? false, executionSuccess: $node['Execute Project'].json.data?.success ?? false, reviewSuccess: $node['Review Result'].json.data?.success ?? false, nextAction: $node['Review Result'].json.data?.nextAction ?? null, summary: $node['Review Result'].json.data?.summary ?? '', reportMarkdown: $node['Generate Final Report'].json.data.markdown } }}",
+        "responseBody": "={{ { success: true, executionId: $node['Parse Incoming Request'].json.executionId, status: $node['Generate Final Report'].json.data.status, codeGenerated: Array.isArray($node['Generate Code'].json.data?.files) ? $node['Generate Code'].json.data.files.length > 0 : !!$node['Generate Code'].json.data, executionAvailable: $node['Execute Project'].json.data?.available ?? false, executionSuccess: $node['Execute Project'].json.data?.success ?? false, reviewSuccess: $node['Review Result'].json.data?.success ?? false, nextAction: $node['Review Result'].json.data?.nextAction ?? null, summary: $node['Review Result'].json.data?.summary ?? '', reportMarkdown: $node['Generate Final Report'].json.data.markdown } }}",
         "options": {
           "responseCode": 200
         }
