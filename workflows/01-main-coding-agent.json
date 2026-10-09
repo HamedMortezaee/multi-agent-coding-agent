@@ -412,7 +412,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { command: 'dotnet test', timeoutSeconds: 60 } }}",
+        "jsonBody": "={{ { command: 'dotnet test', timeoutSeconds: 120 } }}",
         "options": {
           "response": {
             "response": {
@@ -479,8 +479,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        1220,
-        300
+        1860,
+        360
       ]
     },
     {
@@ -547,8 +547,110 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        980,
+        1620,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-fix-needed",
+              "leftValue": "={{ $json.data?.nextAction ?? '' }}",
+              "rightValue": "fix",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "1d07cb01-8e31-4ca6-95bf-e9805d9a0019",
+      "name": "Is Fix Needed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        940,
         300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $node['Workflow Config'].json.apiUrl + '/api/v1/runs/' + $node['Parse Incoming Request'].json.executionId + '/fix' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Agent-Api-Key",
+              "value": "={{ $node['Workflow Config'].json.apiKey }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {} }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "id": "1d07cb01-8e31-4ca6-95bf-e9805d9a0020",
+      "name": "Fix Project",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1160,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-fix-applied",
+              "leftValue": "={{ $json.success === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "1d07cb01-8e31-4ca6-95bf-e9805d9a0021",
+      "name": "Fix Applied?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1380,
+        180
       ]
     }
   ],
@@ -706,7 +808,7 @@
       "main": [
         [
           {
-            "node": "Generate Final Report",
+            "node": "Is Fix Needed?",
             "type": "main",
             "index": 0
           }
@@ -740,6 +842,53 @@
         [
           {
             "node": "Respond After Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Fix Needed?": {
+      "main": [
+        [
+          {
+            "node": "Fix Project",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Generate Final Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fix Project": {
+      "main": [
+        [
+          {
+            "node": "Fix Applied?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fix Applied?": {
+      "main": [
+        [
+          {
+            "node": "Execute Project",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Generate Final Report",
             "type": "main",
             "index": 0
           }
