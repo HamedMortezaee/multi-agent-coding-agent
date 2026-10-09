@@ -1,6 +1,5 @@
 #pragma warning disable OPENAI001
 
-using CodingAgent.Api.Configuration;
 using CodingAgent.Api.Contracts;
 using CodingAgent.Api.Security;
 using CodingAgent.Application.Abstractions;
@@ -116,12 +115,17 @@ if (string.Equals(aiProvider, "Aifa", StringComparison.OrdinalIgnoreCase))
         BaseUrl = aifaBaseUrl.TrimEnd('/') + "/",
         Model = builder.Configuration["Aifa:Model"]?.Trim()
             ?? "assistance-model",
-        Token = string.IsNullOrWhiteSpace(builder.Configuration["Aifa:Token"])
-            ? TemporarySecrets.AifaApiToken
-            : builder.Configuration["Aifa:Token"]!,
+        Token = builder.Configuration["Aifa:Token"]?.Trim()
+            ?? string.Empty,
         UserId = builder.Configuration["Aifa:UserId"]?.Trim()
             ?? "coding-agent"
     };
+
+    if (string.IsNullOrWhiteSpace(aifaOptions.Token))
+    {
+        throw new InvalidOperationException(
+            "Aifa:Token is required when AI:Provider is Aifa.");
+    }
 
     builder.Services.AddSingleton(aifaOptions);
     builder.Services.AddSingleton<ILlmService>(_ =>
@@ -142,9 +146,14 @@ else if (string.Equals(aiProvider, "OpenAI", StringComparison.OrdinalIgnoreCase)
         ?? "https://api.openai.com/v1/";
 
     var openAiApiKey =
-        string.IsNullOrWhiteSpace(builder.Configuration["OpenAI:ApiKey"])
-            ? TemporarySecrets.OpenAiApiKey
-            : builder.Configuration["OpenAI:ApiKey"]!;
+        builder.Configuration["OpenAI:ApiKey"]?.Trim()
+        ?? string.Empty;
+
+    if (string.IsNullOrWhiteSpace(openAiApiKey))
+    {
+        throw new InvalidOperationException(
+            "OpenAI:ApiKey is required when AI:Provider is OpenAI.");
+    }
 
     var openAiClientOptions = new ResponsesClientOptions
     {
@@ -199,10 +208,8 @@ app.MapGet("/api/v1/diagnostics/llm", (
         : builder.Configuration["OpenAI:BaseUrl"];
 
     var credentialConfigured = isAifa
-        ? !string.IsNullOrWhiteSpace(builder.Configuration["Aifa:Token"]) ||
-          TemporarySecrets.AifaApiToken != "CHANGE_ME_AIFA_API_TOKEN"
-        : !string.IsNullOrWhiteSpace(builder.Configuration["OpenAI:ApiKey"]) ||
-          TemporarySecrets.OpenAiApiKey != "CHANGE_ME_OPENAI_API_KEY";
+        ? !string.IsNullOrWhiteSpace(builder.Configuration["Aifa:Token"])
+        : !string.IsNullOrWhiteSpace(builder.Configuration["OpenAI:ApiKey"]);
 
     return Results.Ok(new
     {
