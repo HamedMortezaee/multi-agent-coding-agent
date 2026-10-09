@@ -6,7 +6,8 @@ namespace CodingAgent.Application.Fixing;
 
 public sealed class FixerService(
     IAgentRunRepository repository,
-    ILlmService llmService)
+    ILlmService llmService,
+    IWorkspaceService workspaceService)
 {
     private const int MaxFixAttempts = 3;
 
@@ -88,6 +89,12 @@ Rules:
                 change.Content,
                 change.Reason)).ToArray(),
             payload.Summary);
+
+        await workspaceService.MaterializeAsync(
+            executionId,
+            run.Files,
+            cancellationToken);
+
         await repository.SaveAsync(run, cancellationToken);
 
         return new FixerResponse(
