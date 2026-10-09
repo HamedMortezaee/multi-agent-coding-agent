@@ -12,19 +12,43 @@ if (!Path.IsPathRooted(workspaceRoot))
     workspaceRoot = Path.Combine(AppContext.BaseDirectory, workspaceRoot);
 
 workspaceRoot = Path.GetFullPath(workspaceRoot);
-Directory.CreateDirectory(workspaceRoot);
 
 var app = builder.Build();
 
-app.MapGet("/health", () => Results.Ok(new
+app.MapGet("/", () => Results.Ok(new
 {
-    status = "ok",
-    dotnetAvailable = File.Exists(
-        Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-            "dotnet",
-            "dotnet.exe")) || OperatingSystem.IsLinux() || OperatingSystem.IsMacOS()
+    service = "CodingAgent.Runner",
+    status = "ok"
 }));
+
+app.MapGet("/health", () =>
+{
+    var workspaceExists = Directory.Exists(workspaceRoot);
+    var workspaceWritable = false;
+    string? workspaceError = null;
+
+    try
+    {
+        Directory.CreateDirectory(workspaceRoot);
+        var probePath = Path.Combine(workspaceRoot, $".write-probe-{Guid.NewGuid():N}.tmp");
+        File.WriteAllText(probePath, "ok");
+        File.Delete(probePath);
+        workspaceWritable = true;
+    }
+    catch (Exception exception)
+    {
+        workspaceError = exception.Message;
+    }
+
+    return Results.Ok(new
+    {
+        status = "ok",
+        workspaceRoot,
+        workspaceExists = Directory.Exists(workspaceRoot),
+        workspaceWritable,
+        workspaceError
+    });
+});
 
 
 app.MapGet("/api/v1/diagnostics/dotnet", async (
