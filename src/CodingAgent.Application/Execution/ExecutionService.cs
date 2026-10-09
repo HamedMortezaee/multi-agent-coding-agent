@@ -4,7 +4,8 @@ using CodingAgent.Domain;
 namespace CodingAgent.Application.Execution;
 
 public sealed class ExecutionService(
-    IAgentRunRepository repository)
+    IAgentRunRepository repository,
+    IExecutionSandbox executionSandbox)
 {
     public async Task<ExecutionResponse> ExecuteAsync(
         Guid executionId,
@@ -24,15 +25,12 @@ public sealed class ExecutionService(
 
         var startedAt = DateTimeOffset.UtcNow;
 
-        var result = new ExecutionResult(
-            Available: false,
-            Success: false,
-            ExitCode: null,
-            StandardOutput: string.Empty,
-            StandardError: string.Empty,
-            DurationMs: 0,
-            TimedOut: false,
-            Reason: "EXECUTION_UNAVAILABLE");
+        var result = await executionSandbox.ExecuteAsync(
+            executionId,
+            run.Files,
+            request.Command,
+            request.TimeoutSeconds,
+            cancellationToken);
 
         var completedAt = DateTimeOffset.UtcNow;
         run.RecordExecutionAttempt(startedAt, completedAt, result);
