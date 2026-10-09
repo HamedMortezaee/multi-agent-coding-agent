@@ -10,6 +10,7 @@ using CodingAgent.Application.Fixing;
 using CodingAgent.Application.HumanReview;
 using CodingAgent.Application.Planning;
 using CodingAgent.Application.Reviewing;
+using CodingAgent.Application.Reporting;
 using CodingAgent.Application.Runs.CreateRun;
 using CodingAgent.Infrastructure.OpenAI;
 using CodingAgent.Infrastructure.Persistence;
@@ -51,6 +52,7 @@ builder.Services.AddScoped<CoderService>();
 builder.Services.AddScoped<ExecutionService>();
 builder.Services.AddScoped<ReviewerService>();
 builder.Services.AddScoped<FixerService>();
+builder.Services.AddScoped<FinalReportService>();
 
 var app = builder.Build();
 
@@ -351,6 +353,50 @@ app.MapPost("/api/v1/runs/{executionId:guid}/fix", async (
             executionId,
             code,
             exception.Message);
+    }
+});
+
+app.MapPost("/api/v1/runs/{executionId:guid}/report", async (
+    Guid executionId,
+    FinalReportService service,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var result = await service.ExecuteAsync(executionId, cancellationToken);
+
+        return Results.Ok(
+            new ApiResponse<FinalReportResponse>(
+                true,
+                result,
+                Array.Empty<ApiError>(),
+                new ApiMeta(executionId, DateTimeOffset.UtcNow)));
+    }
+    catch (KeyNotFoundException)
+    {
+        return RunNotFound(executionId);
+    }
+});
+
+app.MapGet("/api/v1/runs/{executionId:guid}/report", async (
+    Guid executionId,
+    FinalReportService service,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var result = await service.ExecuteAsync(executionId, cancellationToken);
+
+        return Results.Ok(
+            new ApiResponse<FinalReportResponse>(
+                true,
+                result,
+                Array.Empty<ApiError>(),
+                new ApiMeta(executionId, DateTimeOffset.UtcNow)));
+    }
+    catch (KeyNotFoundException)
+    {
+        return RunNotFound(executionId);
     }
 });
 
