@@ -1,23 +1,221 @@
 # Multi-Agent Coding Agent
 
-A multi-agent coding assistant orchestrated with **n8n**, backed by **ASP.NET Core / C#**, and integrated with **OpenAI**.
+A multi-agent coding system orchestrated with **n8n**, implemented with **ASP.NET Core / C#**, and backed by configurable LLM providers.
 
-## Current Architecture
+## Current Status
 
-- **n8n runtime:** n8nir.ir
-- **Backend:** ASP.NET Core
-- **Language:** C#
-- **LLM provider:** Configurable (`OpenAI` or `Aifa`)
-- **Deployment:** Windows Hosting
-- **Workflow delivery:** Importable n8n JSON
-- **Human-in-the-loop:** n8n
-- **State management:** ASP.NET Core backend
-- **Generated workspace:** `App_Data/workspaces/{executionId:N}` on the API host
-- **Code execution:** Abstracted behind `IExecutionSandbox` (runner currently unavailable)
-- **Max fix attempts:** 3
-- **Max run duration:** 15 minutes
-- **Final report:** Markdown
-- **Initial demo target:** ASP.NET Core Todo REST API
+The core flow has been validated end-to-end:
+
+```text
+Planner
+  ↓
+Human Review
+  ↓
+Coder
+  ↓
+Generated Project + xUnit Tests
+  ↓
+Runner
+  ↓
+dotnet restore / build / test
+  ↓
+Reviewer
+  ↓
+Final Report
+```
+
+Validated run:
+
+```text
+ExecutionId: fc30d504-9248-4413-81ee-f0e200a96c4a
+Status: Completed
+Tests: 3 passed, 0 failed
+Reviewer nextAction: complete
+```
+
+## Architecture
+
+```text
+User
+  ↓
+n8n
+  ↓ HTTPS/JSON
+CodingAgent.Api
+  ├── Planner
+  ├── Human Review
+  ├── Coder
+  ├── Reviewer
+  ├── Fixer
+  ├── State/Persistence
+  ├── Workspace
+  └── Final Report
+       │
+       ├── ILlmService
+       │    ├── OpenAiLlmService
+       │    └── AifaLlmService
+       │
+       └── IExecutionSandbox
+            └── RemoteExecutionSandbox
+                  ↓ HTTPS
+             CodingAgent.Runner
+                  ↓
+             dotnet restore
+             dotnet build
+             dotnet test
+```
+
+## Deployment
+
+- Agent API: `https://n8n-agent.samanooqazvin.com`
+- Runner API: `https://n8n-runner.samanooqazvin.com`
+- Agent Swagger: `https://n8n-agent.samanooqazvin.com/swagger`
+- Runner Swagger: `https://n8n-runner.samanooqazvin.com/swagger`
+- Target Framework: .NET 9
+
+## Main Features
+
+- Planner, Coder, Reviewer and Fixer agents
+- Durable human-in-the-loop after planning
+- Maximum 3 fix attempts
+- Maximum 15-minute run duration
+- Physical generated workspaces
+- Real code execution through a remote Runner
+- Real `dotnet restore`, `dotnet build` and `dotnet test`
+- xUnit test generation
+- Configurable OpenAI / AIFA provider
+- Markdown final report
+- Swagger for both APIs
+- Importable n8n workflow
+
+## Repository Structure
+
+```text
+multi-agent-coding-agent/
+├── CodingAgent.sln
+├── README.md
+├── docs/
+│   ├── ADR/
+│   ├── SDD/
+│   └── Technical/
+├── src/
+│   ├── CodingAgent.Api/
+│   ├── CodingAgent.Application/
+│   ├── CodingAgent.Domain/
+│   ├── CodingAgent.Infrastructure/
+│   └── CodingAgent.Runner/
+└── workflows/
+    └── 01-main-coding-agent.json
+```
+
+## Workspaces
+
+Agent API workspace:
+
+```text
+App_Data/workspaces/{executionId:N}/
+```
+
+Runner workspace:
+
+```text
+RunnerData/workspaces/{executionId:N}/
+```
+
+Persistent Runner NuGet cache:
+
+```text
+RunnerData/nuget-packages/
+```
+
+## LLM Providers
+
+OpenAI:
+
+```json
+{
+  "AI": { "Provider": "OpenAI" },
+  "OpenAI": {
+    "BaseUrl": "https://api.openai.com/v1/",
+    "Model": "gpt-5.6-sol",
+    "ApiKey": ""
+  }
+}
+```
+
+AIFA:
+
+```json
+{
+  "AI": { "Provider": "Aifa" },
+  "Aifa": {
+    "BaseUrl": "https://aifa-chatbot.dev.dotin.ir/",
+    "Model": "assistance-model",
+    "Token": "",
+    "UserId": "coding-agent"
+  }
+}
+```
+
+Credentials are configuration-driven and real secrets must not be committed.
+
+## Security
+
+Agent API routes under `/api/*` use:
+
+```http
+X-Agent-Api-Key: <secret>
+```
+
+Runner endpoints can use:
+
+```http
+X-Runner-Api-Key: <secret>
+```
+
+Generated code is untrusted. The Windows Runner is an execution runner, not a hardened security sandbox, so it should run with minimal permissions and no production secrets.
+
+## Human-in-the-loop
+
+```text
+Start Request
+  ↓
+Planner
+  ↓
+WaitingForHuman
+  ↓
+workflow ends
+
+Human Review Request
+  ↓
+same executionId resumes
+  ↓
+Coder
+```
+
+Supported decisions: `approve`, `modify`, `reject`.
+
+## Fix Loop
+
+```text
+Execute
+  ↓
+Reviewer
+  ↓
+nextAction?
+ ├── complete → Final Report
+ ├── fail     → Final Report
+ └── fix
+      ↓
+    Fixer
+      ↓
+    Execute
+      ↓
+    Reviewer
+```
+
+## Final Report
+
+The Markdown report contains execution metadata, request, plan, human feedback, generated files, execution attempts, stdout/stderr, reviewer result, fix history and final status.
 
 ## Documentation
 
@@ -25,75 +223,4 @@ A multi-agent coding assistant orchestrated with **n8n**, backed by **ASP.NET Co
 - `docs/SDD/Software-Design-Document.md`
 - `docs/Technical/Agent-Contracts.md`
 - `docs/Technical/API-Design.md`
-
-## Repository Structure
-
-```text
-multi-agent-coding-agent/
-├── README.md
-├── docs/
-│   ├── ADR/
-│   └── SDD/
-├── src/
-├── tests/
-└── workflows/
-```
-
-The `workflows` directory will contain n8n workflow JSON files that can be imported into n8nir.ir.
-
-
-## Generated Workspaces
-
-After the Coder agent produces files, the backend materializes the current project snapshot to disk:
-
-```text
-App_Data/
-└── workspaces/
-    └── {executionId:N}/
-        ├── *.sln
-        ├── README.md
-        ├── src/
-        └── tests/
-```
-
-The workspace is rebuilt from the canonical files stored in the agent run. Fixer changes are also re-materialized so the on-disk workspace stays synchronized with the latest project state.
-
-The Windows application pool identity must have **Modify/Write** permission on `App_Data/workspaces`.
-
-
-## LLM Provider Selection
-
-The backend uses `ILlmService` and can switch providers without changing the agents.
-
-OpenAI:
-
-```json
-"AI": {
-  "Provider": "OpenAI",
-  "Model": "gpt-5.6-sol"
-}
-```
-
-AIFA:
-
-```json
-"AI": {
-  "Provider": "Aifa",
-  "Model": "gpt-5.6-sol"
-},
-"Aifa": {
-  "BaseUrl": "https://aifa-chatbot.dev.dotin.ir/",
-  "Model": "assistance-model",
-  "Token": "",
-  "UserId": "coding-agent"
-}
-```
-
-Provider credentials are read from configuration only. Prefer environment variables or deployment secrets in real environments; do not commit real credentials.
-
-Diagnostics:
-
-```text
-GET  /api/v1/diagnostics/llm
-POST /api/v1/diagnostics/llm/test
-```
+- `workflows/README.md`
