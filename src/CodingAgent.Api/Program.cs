@@ -13,6 +13,7 @@ using CodingAgent.Application.Reviewing;
 using CodingAgent.Application.Reporting;
 using CodingAgent.Application.Runs.CreateRun;
 using CodingAgent.Infrastructure.OpenAI;
+using CodingAgent.Infrastructure.Execution;
 using CodingAgent.Infrastructure.Persistence;
 using CodingAgent.Infrastructure.Workspaces;
 using OpenAI.Responses;
@@ -60,6 +61,31 @@ else if (!Path.IsPathRooted(workspaceRoot))
 
 builder.Services.AddSingleton<IWorkspaceService>(
     _ => new FileSystemWorkspaceService(workspaceRoot));
+
+var runnerBaseUrl = builder.Configuration["Runner:BaseUrl"];
+var runnerApiKey = builder.Configuration["Runner:ApiKey"] ?? string.Empty;
+
+if (string.IsNullOrWhiteSpace(runnerBaseUrl))
+{
+    builder.Services.AddSingleton<IExecutionSandbox, UnavailableExecutionSandbox>();
+}
+else
+{
+    var normalizedRunnerBaseUrl = runnerBaseUrl.TrimEnd('/') + "/";
+    var runnerOptions = new RemoteRunnerOptions
+    {
+        BaseUrl = normalizedRunnerBaseUrl,
+        ApiKey = runnerApiKey
+    };
+
+    builder.Services.AddSingleton(runnerOptions);
+    builder.Services.AddSingleton(_ => new HttpClient
+    {
+        BaseAddress = new Uri(normalizedRunnerBaseUrl, UriKind.Absolute),
+        Timeout = Timeout.InfiniteTimeSpan
+    });
+    builder.Services.AddSingleton<IExecutionSandbox, RemoteExecutionSandbox>();
+}
 
 builder.Services.AddSingleton(
     _ => new ResponsesClient(TemporarySecrets.OpenAiApiKey));
