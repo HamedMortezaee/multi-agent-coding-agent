@@ -110,6 +110,19 @@ app.MapGet("/health", () => Results.Ok(new
     utcNow = DateTimeOffset.UtcNow
 }));
 
+app.MapGet("/api/v1/diagnostics/runner", (
+    IExecutionSandbox executionSandbox) =>
+{
+    var configuredBaseUrl = builder.Configuration["Runner:BaseUrl"];
+
+    return Results.Ok(new
+    {
+        configured = !string.IsNullOrWhiteSpace(configuredBaseUrl),
+        baseUrl = configuredBaseUrl,
+        implementation = executionSandbox.GetType().Name
+    });
+});
+
 app.MapPost("/api/v1/runs", async (
     CreateRunRequest request,
     CreateRunService service,
