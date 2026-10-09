@@ -26,6 +26,84 @@ app.MapGet("/health", () => Results.Ok(new
             "dotnet.exe")) || OperatingSystem.IsLinux() || OperatingSystem.IsMacOS()
 }));
 
+
+app.MapGet("/api/v1/diagnostics/dotnet", async (
+    HttpContext httpContext,
+    CancellationToken cancellationToken) =>
+{
+    if (!string.IsNullOrWhiteSpace(options.ApiKey))
+    {
+        var supplied = httpContext.Request.Headers["X-Runner-Api-Key"].ToString();
+        if (!FixedTimeEquals(supplied, options.ApiKey))
+            return Results.Unauthorized();
+    }
+
+    var startedAt = Stopwatch.StartNew();
+
+    using var process = new Process
+    {
+        StartInfo = new ProcessStartInfo
+        {
+            FileName = "dotnet",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        }
+    };
+
+    process.StartInfo.ArgumentList.Add("--info");
+
+    try
+    {
+        if (!process.Start())
+        {
+            return Results.Ok(new
+            {
+                processAvailable = false,
+                success = false,
+                exitCode = (int?)null,
+                stdout = string.Empty,
+                stderr = "dotnet process could not be started.",
+                durationMs = startedAt.ElapsedMilliseconds,
+                reason = "DOTNET_PROCESS_START_FAILED"
+            });
+        }
+
+        var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
+
+        await process.WaitForExitAsync(cancellationToken);
+
+        var stdout = await stdoutTask;
+        var stderr = await stderrTask;
+
+        return Results.Ok(new
+        {
+            processAvailable = true,
+            success = process.ExitCode == 0,
+            exitCode = (int?)process.ExitCode,
+            stdout,
+            stderr,
+            durationMs = startedAt.ElapsedMilliseconds,
+            reason = process.ExitCode == 0 ? null : "DOTNET_INFO_FAILED"
+        });
+    }
+    catch (Exception exception)
+    {
+        return Results.Ok(new
+        {
+            processAvailable = false,
+            success = false,
+            exitCode = (int?)null,
+            stdout = string.Empty,
+            stderr = exception.Message,
+            durationMs = startedAt.ElapsedMilliseconds,
+            reason = "DOTNET_PROCESS_UNAVAILABLE"
+        });
+    }
+});
+
 app.MapPost("/api/v1/executions", async (
     HttpContext httpContext,
     RunnerExecutionRequest request,
