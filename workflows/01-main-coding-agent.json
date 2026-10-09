@@ -4,7 +4,7 @@
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "coding-agent",
+        "path": "eb5d4080-cb64-48d9-ba43-6f761425c1f4",
         "responseMode": "responseNode",
         "options": {}
       },
@@ -38,7 +38,7 @@
             {
               "id": "cfg-api-url",
               "name": "apiUrl",
-              "value": "https://CHANGE_ME_API_URL",
+              "value": "https://n8n.samanooqazvin.com/",
               "type": "string"
             },
             {
