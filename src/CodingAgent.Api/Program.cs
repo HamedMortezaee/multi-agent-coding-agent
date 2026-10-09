@@ -141,6 +141,64 @@ app.MapGet("/api/v1/diagnostics/runner", (
     });
 });
 
+app.MapPost("/api/v1/diagnostics/runner/execute", async (
+    IExecutionSandbox executionSandbox,
+    CancellationToken cancellationToken) =>
+{
+    var executionId = Guid.NewGuid();
+
+    var files = new[]
+    {
+        new CodingAgent.Domain.ProjectFile
+        {
+            Path = "DiagnosticApp.csproj",
+            Content = """
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+</Project>
+""",
+            Version = 1
+        },
+        new CodingAgent.Domain.ProjectFile
+        {
+            Path = "Program.cs",
+            Content = """
+Console.WriteLine("CodingAgent API -> Runner OK");
+""",
+            Version = 1
+        }
+    };
+
+    var startedAt = DateTimeOffset.UtcNow;
+
+    var result = await executionSandbox.ExecuteAsync(
+        executionId,
+        files,
+        "dotnet build",
+        120,
+        cancellationToken);
+
+    return Results.Ok(new
+    {
+        diagnosticsVersion = "runner-execute-v1",
+        executionId,
+        startedAt,
+        completedAt = DateTimeOffset.UtcNow,
+        runner = new
+        {
+            configuredBaseUrl = builder.Configuration["Runner:BaseUrl"],
+            allowInvalidCertificate = runnerAllowInvalidCertificate,
+            implementation = executionSandbox.GetType().Name
+        },
+        result
+    });
+});
+
 app.MapPost("/api/v1/runs", async (
     CreateRunRequest request,
     CreateRunService service,
