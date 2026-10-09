@@ -25,22 +25,13 @@ Workflow Config
 and set:
 
 ```text
-apiUrl = https://your-windows-host.example.com
-apiKey = <same value as AgentApiKey in ASP.NET Core TemporarySecrets.cs>
+apiUrl = https://n8n-agent.samanooqazvin.com
+apiKey = <same value as Security:ApiKey in CodingAgent.Api>
 ```
 
 All HTTP Request nodes read these values from the `Workflow Config` node.
 
-Current workflow values are:
-
-```text
-apiUrl = https://n8n.samanooqazvin.com
-apiKey = CHANGE_ME_AGENT_API_KEY
-```
-
-Set `apiKey` inside n8n before execution. The tracked workflow intentionally keeps the key as a placeholder.
-
-For the current test phase this makes configuration easier because you only edit one node after import.
+Set `apiKey` inside n8n before execution. The tracked workflow must keep secrets as placeholders.
 
 ---
 
@@ -103,31 +94,48 @@ Reject marks the run as Failed and the workflow stops before code generation.
 
 ---
 
-## Current Execution Limitation
+## Real Execution
 
 After approval the workflow performs:
 
 ```text
-Coder
+Generate Code
  ↓
-Execute
+Execute Project
  ↓
-Reviewer
+Review Result
  ↓
-Generate Final Report
- ↓
-Respond After Review
+Is Fix Needed?
+ ├── no  → Generate Final Report
+ └── yes → Fix Project
+              ↓
+          Execute Project
+              ↓
+          Review Result
 ```
 
-The current backend has no real sandbox/runner. Therefore Execute currently returns:
+Execution is delegated by CodingAgent.Api to:
 
 ```text
-503 EXECUTION_UNAVAILABLE
+https://n8n-runner.samanooqazvin.com
 ```
 
-The HTTP Request node is configured with Never Error so the workflow continues to Reviewer. Reviewer records this as an infrastructure failure rather than asking Fixer to modify source code.
+The Runner performs real:
 
-When a real runner is configured later, the workflow contract remains the same.
+```text
+dotnet restore
+dotnet build
+dotnet test
+```
+
+A validated run completed with:
+
+```text
+3 tests passed
+0 tests failed
+Reviewer nextAction = complete
+Status = Completed
+```
 
 ---
 
