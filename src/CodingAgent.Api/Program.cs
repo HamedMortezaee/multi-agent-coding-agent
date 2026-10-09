@@ -565,7 +565,7 @@ app.MapPost("/api/v1/runs/{executionId:guid}/execute", async (
                     {
                         new ApiError(
                             "EXECUTION_UNAVAILABLE",
-                            $"Runner is unavailable. Reason: {result.Reason ?? "unknown"}. {result.StandardError}",
+                            $"Runner is unavailable. Reason: {result.Reason ?? "unknown"}. {result.Stderr}",
                             Retryable: result.Reason is "RUNNER_UNREACHABLE" or "RUNNER_REQUEST_TIMEOUT")
                     },
                     new ApiMeta(executionId, DateTimeOffset.UtcNow)),
