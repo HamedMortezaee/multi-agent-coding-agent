@@ -1,7 +1,39 @@
 using System.Diagnostics;
 using System.Text;
+using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(swagger =>
+{
+    swagger.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "CodingAgent Runner API",
+        Version = "v1",
+        Description = "Execution runner for generated projects."
+    });
+
+    swagger.AddSecurityDefinition("RunnerApiKey", new OpenApiSecurityScheme
+    {
+        Name = "X-Runner-Api-Key",
+        Type = SecuritySchemeType.ApiKey,
+        In = ParameterLocation.Header,
+        Description = "Runner API key when Runner:ApiKey is configured."
+    });
+
+    swagger.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        [new OpenApiSecurityScheme
+        {
+            Reference = new OpenApiReference
+            {
+                Type = ReferenceType.SecurityScheme,
+                Id = "RunnerApiKey"
+            }
+        }] = Array.Empty<string>()
+    });
+});
 
 var options = builder.Configuration
     .GetSection("Runner")
@@ -14,6 +46,13 @@ if (!Path.IsPathRooted(workspaceRoot))
 workspaceRoot = Path.GetFullPath(workspaceRoot);
 
 var app = builder.Build();
+
+app.UseSwagger();
+app.UseSwaggerUI(swagger =>
+{
+    swagger.SwaggerEndpoint("/swagger/v1/swagger.json", "CodingAgent Runner API v1");
+    swagger.RoutePrefix = "swagger";
+});
 
 app.MapGet("/", () => Results.Ok(new
 {
