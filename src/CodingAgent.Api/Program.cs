@@ -14,6 +14,7 @@ using CodingAgent.Application.Reporting;
 using CodingAgent.Application.Runs.CreateRun;
 using CodingAgent.Infrastructure.OpenAI;
 using CodingAgent.Infrastructure.Persistence;
+using CodingAgent.Infrastructure.Workspaces;
 using OpenAI.Responses;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -40,6 +41,25 @@ else if (!Path.IsPathRooted(persistenceRoot))
 
 builder.Services.AddSingleton<IAgentRunRepository>(
     _ => new JsonFileAgentRunRepository(persistenceRoot));
+
+var workspaceRoot = builder.Configuration["Workspace:RootPath"];
+
+if (string.IsNullOrWhiteSpace(workspaceRoot))
+{
+    workspaceRoot = Path.Combine(
+        AppContext.BaseDirectory,
+        "App_Data",
+        "workspaces");
+}
+else if (!Path.IsPathRooted(workspaceRoot))
+{
+    workspaceRoot = Path.Combine(
+        AppContext.BaseDirectory,
+        workspaceRoot);
+}
+
+builder.Services.AddSingleton<IWorkspaceService>(
+    _ => new FileSystemWorkspaceService(workspaceRoot));
 
 builder.Services.AddSingleton(
     _ => new ResponsesClient(TemporarySecrets.OpenAiApiKey));
