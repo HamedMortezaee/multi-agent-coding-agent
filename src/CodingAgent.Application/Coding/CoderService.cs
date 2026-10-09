@@ -49,6 +49,9 @@ Rules:
 - Target platform: ASP.NET Core.
 - Target language: C#.
 - Keep the project small and appropriate for an MVP.
+- Always include at least one automated test project using xUnit.
+- Always include the required xUnit/Test SDK package references and namespace imports.
+- Prefer returning a solution file that includes both the API project and test project.
 - Every required source/config/project file must be returned with complete contents.
 - File paths must be relative.
 - Never use '..' in a file path.
