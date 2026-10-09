@@ -6,4 +6,5 @@ public sealed class RemoteRunnerOptions
 
     public string BaseUrl { get; init; } = string.Empty;
     public string ApiKey { get; init; } = string.Empty;
+    public bool AllowInvalidCertificate { get; init; }
 }
