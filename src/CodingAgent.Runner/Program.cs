@@ -181,6 +181,26 @@ app.MapPost("/api/v1/executions", async (
         });
     }
 
+    if (string.Equals(request.Command?.Trim(), "dotnet test", StringComparison.OrdinalIgnoreCase))
+    {
+        var testTarget = ResolveTestTarget(workspacePath);
+
+        if (testTarget is null)
+        {
+            return Results.Ok(new RunnerExecutionResponse(
+                Available: true,
+                Success: false,
+                ExitCode: null,
+                Stdout: string.Empty,
+                Stderr: "No solution or test project was found. Generate at least one test project (for example *Tests.csproj) or a solution that includes tests.",
+                DurationMs: 0,
+                TimedOut: false,
+                Reason: "TEST_PROJECT_NOT_FOUND"));
+        }
+
+        arguments = ["test", testTarget, "--nologo"];
+    }
+
     var startedAt = Stopwatch.StartNew();
     using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
     timeoutCts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
@@ -376,6 +396,43 @@ static void MaterializeWorkspace(
     {
         throw new InvalidOperationException("Workspace escaped runner root.");
     }
+}
+
+static string? ResolveTestTarget(string workspacePath)
+{
+    static bool IsBuildArtifact(string path) =>
+        path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            .Any(segment =>
+                string.Equals(segment, "bin", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(segment, "obj", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(segment, ".profile", StringComparison.OrdinalIgnoreCase));
+
+    var solutions = Directory
+        .EnumerateFiles(workspacePath, "*.sln", SearchOption.AllDirectories)
+        .Where(path => !IsBuildArtifact(path))
+        .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+        .ToArray();
+
+    if (solutions.Length > 0)
+        return solutions[0];
+
+    var testProjects = Directory
+        .EnumerateFiles(workspacePath, "*.csproj", SearchOption.AllDirectories)
+        .Where(path => !IsBuildArtifact(path))
+        .Where(path =>
+        {
+            var fileName = Path.GetFileNameWithoutExtension(path);
+            var directoryName = Path.GetDirectoryName(path) ?? string.Empty;
+
+            return fileName.Contains("Test", StringComparison.OrdinalIgnoreCase) ||
+                   directoryName.Contains("Test", StringComparison.OrdinalIgnoreCase);
+        })
+        .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+        .ToArray();
+
+    return testProjects.Length == 1
+        ? testProjects[0]
+        : null;
 }
 
 static void ConfigureDotnetEnvironment(
