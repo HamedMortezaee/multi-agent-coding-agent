@@ -78,6 +78,9 @@ app.MapGet("/api/v1/diagnostics/dotnet", async (
 
     process.StartInfo.ArgumentList.Add("--info");
 
+    var diagnosticRoot = Path.Combine(workspaceRoot, ".diagnostics");
+    ConfigureDotnetEnvironment(process.StartInfo, diagnosticRoot);
+
     try
     {
         if (!process.Start())
@@ -201,6 +204,8 @@ app.MapPost("/api/v1/executions", async (
 
     foreach (var argument in arguments)
         process.StartInfo.ArgumentList.Add(argument);
+
+    ConfigureDotnetEnvironment(process.StartInfo, workspacePath);
 
     process.OutputDataReceived += (_, e) =>
     {
@@ -371,6 +376,23 @@ static void MaterializeWorkspace(
     {
         throw new InvalidOperationException("Workspace escaped runner root.");
     }
+}
+
+static void ConfigureDotnetEnvironment(
+    ProcessStartInfo startInfo,
+    string writableRoot)
+{
+    var dotnetHome = Path.Combine(writableRoot, ".dotnet");
+    var nugetPackages = Path.Combine(writableRoot, ".nuget", "packages");
+
+    Directory.CreateDirectory(dotnetHome);
+    Directory.CreateDirectory(nugetPackages);
+
+    startInfo.Environment["DOTNET_CLI_HOME"] = dotnetHome;
+    startInfo.Environment["NUGET_PACKAGES"] = nugetPackages;
+    startInfo.Environment["DOTNET_SKIP_FIRST_TIME_EXPERIENCE"] = "1";
+    startInfo.Environment["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1";
+    startInfo.Environment["DOTNET_NOLOGO"] = "1";
 }
 
 static bool FixedTimeEquals(string left, string right)
