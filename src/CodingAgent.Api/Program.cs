@@ -64,6 +64,8 @@ builder.Services.AddSingleton<IWorkspaceService>(
 
 var runnerBaseUrl = builder.Configuration["Runner:BaseUrl"];
 var runnerApiKey = builder.Configuration["Runner:ApiKey"] ?? string.Empty;
+var runnerAllowInvalidCertificate =
+    builder.Configuration.GetValue<bool>("Runner:AllowInvalidCertificate");
 
 if (string.IsNullOrWhiteSpace(runnerBaseUrl))
 {
@@ -75,14 +77,26 @@ else
     var runnerOptions = new RemoteRunnerOptions
     {
         BaseUrl = normalizedRunnerBaseUrl,
-        ApiKey = runnerApiKey
+        ApiKey = runnerApiKey,
+        AllowInvalidCertificate = runnerAllowInvalidCertificate
     };
 
     builder.Services.AddSingleton(runnerOptions);
-    builder.Services.AddSingleton(_ => new HttpClient
+    builder.Services.AddSingleton(_ =>
     {
-        BaseAddress = new Uri(normalizedRunnerBaseUrl, UriKind.Absolute),
-        Timeout = Timeout.InfiniteTimeSpan
+        var handler = new HttpClientHandler();
+
+        if (runnerAllowInvalidCertificate)
+        {
+            handler.ServerCertificateCustomValidationCallback =
+                HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+        }
+
+        return new HttpClient(handler)
+        {
+            BaseAddress = new Uri(normalizedRunnerBaseUrl, UriKind.Absolute),
+            Timeout = Timeout.InfiniteTimeSpan
+        };
     });
     builder.Services.AddSingleton<IExecutionSandbox, RemoteExecutionSandbox>();
 }
@@ -119,6 +133,7 @@ app.MapGet("/api/v1/diagnostics/runner", (
     {
         configured = !string.IsNullOrWhiteSpace(configuredBaseUrl),
         baseUrl = configuredBaseUrl,
+        allowInvalidCertificate = runnerAllowInvalidCertificate,
         implementation = executionSandbox.GetType().Name
     });
 });
