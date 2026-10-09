@@ -139,20 +139,20 @@ public sealed class FinalReportService(
                 builder.AppendLine($"- **Reason:** {result.Reason ?? "n/a"}");
                 builder.AppendLine();
 
-                if (!string.IsNullOrWhiteSpace(result.Stdout))
+                if (!string.IsNullOrWhiteSpace(result.StandardOutput))
                 {
                     builder.AppendLine("#### stdout");
                     builder.AppendLine("~~~~text");
-                    builder.AppendLine(result.Stdout);
+                    builder.AppendLine(result.StandardOutput);
                     builder.AppendLine("~~~~");
                     builder.AppendLine();
                 }
 
-                if (!string.IsNullOrWhiteSpace(result.Stderr))
+                if (!string.IsNullOrWhiteSpace(result.StandardError))
                 {
                     builder.AppendLine("#### stderr");
                     builder.AppendLine("~~~~text");
-                    builder.AppendLine(result.Stderr);
+                    builder.AppendLine(result.StandardError);
                     builder.AppendLine("~~~~");
                     builder.AppendLine();
                 }
