@@ -17,8 +17,40 @@ using CodingAgent.Infrastructure.Execution;
 using CodingAgent.Infrastructure.Persistence;
 using CodingAgent.Infrastructure.Workspaces;
 using OpenAI.Responses;
+using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "CodingAgent API",
+        Version = "v1",
+        Description = "Multi-agent coding orchestration API."
+    });
+
+    options.AddSecurityDefinition("AgentApiKey", new OpenApiSecurityScheme
+    {
+        Name = "X-Agent-Api-Key",
+        Type = SecuritySchemeType.ApiKey,
+        In = ParameterLocation.Header,
+        Description = "API key required for /api endpoints."
+    });
+
+    options.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        [new OpenApiSecurityScheme
+        {
+            Reference = new OpenApiReference
+            {
+                Type = ReferenceType.SecurityScheme,
+                Id = "AgentApiKey"
+            }
+        }] = Array.Empty<string>()
+    });
+});
 
 builder.Services.Configure<OpenAiOptions>(
     builder.Configuration.GetSection(OpenAiOptions.SectionName));
@@ -182,6 +214,13 @@ builder.Services.AddScoped<FixerService>();
 builder.Services.AddScoped<FinalReportService>();
 
 var app = builder.Build();
+
+app.UseSwagger();
+app.UseSwaggerUI(options =>
+{
+    options.SwaggerEndpoint("/swagger/v1/swagger.json", "CodingAgent API v1");
+    options.RoutePrefix = "swagger";
+});
 
 app.UseMiddleware<ApiKeyMiddleware>();
 
