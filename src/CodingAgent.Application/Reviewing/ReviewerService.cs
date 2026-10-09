@@ -25,6 +25,11 @@ public sealed class ReviewerService(
 
         if (!latestAttempt.ExecutionResult.Available)
         {
+            var reason = latestAttempt.ExecutionResult.Reason ?? "EXECUTION_UNAVAILABLE";
+            var detail = string.IsNullOrWhiteSpace(latestAttempt.ExecutionResult.StandardError)
+                ? reason
+                : $"{reason}: {latestAttempt.ExecutionResult.StandardError}";
+
             var unavailable = new ReviewerResponse(
                 false,
                 new[]
@@ -33,10 +38,10 @@ public sealed class ReviewerService(
                         "Critical",
                         "ExecutionUnavailable",
                         null,
-                        "No code execution environment is configured.",
-                        latestAttempt.ExecutionResult.Reason)
+                        "The code execution runner was unavailable for this attempt.",
+                        detail)
                 },
-                "Generated code could not be executed because no runner is configured.",
+                $"Generated code could not be executed. Runner reason: {reason}.",
                 "fail");
 
             run.SetReview(ToDomain(unavailable));
