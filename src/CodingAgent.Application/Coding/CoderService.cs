@@ -6,7 +6,8 @@ namespace CodingAgent.Application.Coding;
 
 public sealed class CoderService(
     IAgentRunRepository repository,
-    ILlmService llmService)
+    ILlmService llmService,
+    IWorkspaceService workspaceService)
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -89,6 +90,12 @@ Human feedback:
             .ToArray();
 
         run.SetGeneratedFiles(files);
+
+        await workspaceService.MaterializeAsync(
+            executionId,
+            run.Files,
+            cancellationToken);
+
         await repository.SaveAsync(run, cancellationToken);
 
         return result;
