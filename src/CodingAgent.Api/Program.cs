@@ -13,6 +13,7 @@ using CodingAgent.Application.Reviewing;
 using CodingAgent.Application.Reporting;
 using CodingAgent.Application.Runs.CreateRun;
 using CodingAgent.Infrastructure.OpenAI;
+using CodingAgent.Infrastructure.Aifa;
 using CodingAgent.Infrastructure.Execution;
 using CodingAgent.Infrastructure.Persistence;
 using CodingAgent.Infrastructure.Workspaces;
@@ -22,6 +23,9 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.Configure<OpenAiOptions>(
     builder.Configuration.GetSection(OpenAiOptions.SectionName));
+
+var aiProvider = builder.Configuration["AI:Provider"]?.Trim() ?? "OpenAI";
+var aiModel = builder.Configuration["AI:Model"]?.Trim() ?? string.Empty;
 
 builder.Services.AddSingleton(TimeProvider.System);
 var persistenceRoot = builder.Configuration["Persistence:RootPath"];
@@ -101,10 +105,45 @@ else
     builder.Services.AddSingleton<IExecutionSandbox, RemoteExecutionSandbox>();
 }
 
-builder.Services.AddSingleton(
-    _ => new ResponsesClient(TemporarySecrets.OpenAiApiKey));
+if (string.Equals(aiProvider, "Aifa", StringComparison.OrdinalIgnoreCase))
+{
+    var aifaBaseUrl =
+        builder.Configuration["Aifa:BaseUrl"]?.Trim()
+        ?? "https://aifa-chatbot.dev.dotin.ir/";
 
-builder.Services.AddSingleton<ILlmService, OpenAiLlmService>();
+    var aifaOptions = new AifaOptions
+    {
+        BaseUrl = aifaBaseUrl.TrimEnd('/') + "/",
+        Model = string.IsNullOrWhiteSpace(aiModel)
+            ? "assistance-model"
+            : aiModel,
+        Token = string.IsNullOrWhiteSpace(builder.Configuration["Aifa:Token"])
+            ? TemporarySecrets.AifaApiToken
+            : builder.Configuration["Aifa:Token"]!,
+        UserId = builder.Configuration["Aifa:UserId"]?.Trim()
+            ?? "coding-agent"
+    };
+
+    builder.Services.AddSingleton(aifaOptions);
+    builder.Services.AddSingleton(_ => new HttpClient
+    {
+        BaseAddress = new Uri(aifaOptions.BaseUrl, UriKind.Absolute),
+        Timeout = TimeSpan.FromMinutes(5)
+    });
+    builder.Services.AddSingleton<ILlmService, AifaLlmService>();
+}
+else if (string.Equals(aiProvider, "OpenAI", StringComparison.OrdinalIgnoreCase))
+{
+    builder.Services.AddSingleton(
+        _ => new ResponsesClient(TemporarySecrets.OpenAiApiKey));
+
+    builder.Services.AddSingleton<ILlmService, OpenAiLlmService>();
+}
+else
+{
+    throw new InvalidOperationException(
+        $"Unsupported AI provider '{aiProvider}'. Supported providers: OpenAI, Aifa.");
+}
 builder.Services.AddScoped<CreateRunService>();
 builder.Services.AddScoped<PlannerService>();
 builder.Services.AddScoped<HumanReviewService>();
@@ -123,6 +162,17 @@ app.MapGet("/health", () => Results.Ok(new
     status = "ok",
     utcNow = DateTimeOffset.UtcNow
 }));
+
+app.MapGet("/api/v1/diagnostics/llm", (
+    ILlmService llmService) =>
+{
+    return Results.Ok(new
+    {
+        provider = aiProvider,
+        model = aiModel,
+        implementation = llmService.GetType().Name
+    });
+});
 
 app.MapGet("/api/v1/diagnostics/runner", (
     IExecutionSandbox executionSandbox) =>
