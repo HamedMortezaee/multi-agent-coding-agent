@@ -86,7 +86,7 @@ else
     };
 
     builder.Services.AddSingleton(runnerOptions);
-    builder.Services.AddSingleton(_ =>
+    builder.Services.AddSingleton<IExecutionSandbox>(_ =>
     {
         var handler = new HttpClientHandler();
 
@@ -96,13 +96,14 @@ else
                 HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
         }
 
-        return new HttpClient(handler)
+        var client = new HttpClient(handler)
         {
             BaseAddress = new Uri(normalizedRunnerBaseUrl, UriKind.Absolute),
             Timeout = Timeout.InfiniteTimeSpan
         };
+
+        return new RemoteExecutionSandbox(client, runnerOptions);
     });
-    builder.Services.AddSingleton<IExecutionSandbox, RemoteExecutionSandbox>();
 }
 
 if (string.Equals(aiProvider, "Aifa", StringComparison.OrdinalIgnoreCase))
@@ -125,12 +126,16 @@ if (string.Equals(aiProvider, "Aifa", StringComparison.OrdinalIgnoreCase))
     };
 
     builder.Services.AddSingleton(aifaOptions);
-    builder.Services.AddSingleton(_ => new HttpClient
+    builder.Services.AddSingleton<ILlmService>(_ =>
     {
-        BaseAddress = new Uri(aifaOptions.BaseUrl, UriKind.Absolute),
-        Timeout = TimeSpan.FromMinutes(5)
+        var client = new HttpClient
+        {
+            BaseAddress = new Uri(aifaOptions.BaseUrl, UriKind.Absolute),
+            Timeout = TimeSpan.FromMinutes(5)
+        };
+
+        return new AifaLlmService(client, aifaOptions);
     });
-    builder.Services.AddSingleton<ILlmService, AifaLlmService>();
 }
 else if (string.Equals(aiProvider, "OpenAI", StringComparison.OrdinalIgnoreCase))
 {
