@@ -36,7 +36,8 @@
             }
           ]
         },
-        "options": {}
+        "options": {},
+        "includeOtherFields": true
       },
       "id": "1d07cb01-8e31-4ca6-95bf-e9805d9a0099",
       "name": "Workflow Config",
