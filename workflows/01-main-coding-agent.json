@@ -20,6 +20,19 @@
     },
     {
       "parameters": {
+        "jsCode": "const input = $json;\n\nlet payload = null;\n\nif (input.body?.message?.text) {\n  try {\n    payload = JSON.parse(input.body.message.text);\n  } catch (error) {\n    throw new Error('body.message.text must contain valid JSON.');\n  }\n} else if (input.body?.action) {\n  payload = input.body;\n} else if (input.action) {\n  payload = input;\n} else {\n  throw new Error('No supported request payload found.');\n}\n\nreturn [\n  {\n    json: {\n      ...input,\n      action: payload.action ?? null,\n      request: payload.request ?? null,\n      requestedBy: payload.requestedBy ?? null,\n      executionId: payload.executionId ?? null,\n      decision: payload.decision ?? null,\n      feedback: payload.feedback ?? null,\n      chatId: input.body?.message?.chat?.id ?? null,\n      messageId: input.body?.message?.message_id ?? null\n    }\n  }\n];"
+      },
+      "id": "1d07cb01-8e31-4ca6-95bf-e9805d9a0098",
+      "name": "Parse Incoming Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1120,
+        80
+      ]
+    },
+    {
+      "parameters": {
         "assignments": {
           "assignments": [
             {
@@ -44,7 +57,7 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        -1080,
+        -900,
         80
       ]
     },
@@ -60,7 +73,7 @@
           "conditions": [
             {
               "id": "cond-start",
-              "leftValue": "={{ $node['Coding Agent Webhook'].json.body?.action || $node['Coding Agent Webhook'].json.action }}",
+              "leftValue": "={{ $node['Parse Incoming Request'].json.action }}",
               "rightValue": "start",
               "operator": {
                 "type": "string",
@@ -77,7 +90,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -860,
+        -680,
         80
       ]
     },
@@ -96,7 +109,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { request: ($node['Coding Agent Webhook'].json.body?.request || $node['Coding Agent Webhook'].json.request), requestedBy: ($node['Coding Agent Webhook'].json.body?.requestedBy || $node['Coding Agent Webhook'].json.requestedBy || 'n8n') } }}",
+        "jsonBody": "={{ { request: $node['Parse Incoming Request'].json.request, requestedBy: $node['Parse Incoming Request'].json.requestedBy || 'n8n' } }}",
         "options": {
           "response": {
             "response": {
@@ -176,7 +189,7 @@
           "conditions": [
             {
               "id": "cond-review",
-              "leftValue": "={{ $node['Coding Agent Webhook'].json.body?.action || $node['Coding Agent Webhook'].json.action }}",
+              "leftValue": "={{ $node['Parse Incoming Request'].json.action }}",
               "rightValue": "review",
               "operator": {
                 "type": "string",
@@ -200,7 +213,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $node['Workflow Config'].json.apiUrl + '/api/v1/runs/' + $node['Coding Agent Webhook'].json.body.executionId + '/human-review' }}",
+        "url": "={{ $node['Workflow Config'].json.apiUrl + '/api/v1/runs/' + $node['Parse Incoming Request'].json.executionId + '/human-review' }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -212,7 +225,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { decision: ($node['Coding Agent Webhook'].json.body?.decision || $node['Coding Agent Webhook'].json.decision), feedback: ($node['Coding Agent Webhook'].json.body?.feedback || $node['Coding Agent Webhook'].json.feedback || null) } }}",
+        "jsonBody": "={{ { decision: $node['Parse Incoming Request'].json.decision, feedback: $node['Parse Incoming Request'].json.feedback || null } }}",
         "options": {
           "response": {
             "response": {
@@ -242,7 +255,7 @@
           "conditions": [
             {
               "id": "cond-modify",
-              "leftValue": "={{ $node['Coding Agent Webhook'].json.body?.decision || $node['Coding Agent Webhook'].json.decision }}",
+              "leftValue": "={{ $node['Parse Incoming Request'].json.decision }}",
               "rightValue": "modify",
               "operator": {
                 "type": "string",
@@ -266,7 +279,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $node['Workflow Config'].json.apiUrl + '/api/v1/runs/' + $node['Coding Agent Webhook'].json.body.executionId + '/plan' }}",
+        "url": "={{ $node['Workflow Config'].json.apiUrl + '/api/v1/runs/' + $node['Parse Incoming Request'].json.executionId + '/plan' }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -299,7 +312,7 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ { success: true, executionId: $node['Coding Agent Webhook'].json.body.executionId, status: 'WaitingForHuman', plan: $json.data, message: 'Plan revised using human feedback. Submit another review request.' } }}",
+        "responseBody": "={{ { success: true, executionId: $node['Parse Incoming Request'].json.executionId, status: 'WaitingForHuman', plan: $json.data, message: 'Plan revised using human feedback. Submit another review request.' } }}",
         "options": {
           "responseCode": 200
         }
@@ -325,7 +338,7 @@
           "conditions": [
             {
               "id": "cond-approve",
-              "leftValue": "={{ $node['Coding Agent Webhook'].json.body?.decision || $node['Coding Agent Webhook'].json.decision }}",
+              "leftValue": "={{ $node['Parse Incoming Request'].json.decision }}",
               "rightValue": "approve",
               "operator": {
                 "type": "string",
@@ -349,7 +362,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $node['Workflow Config'].json.apiUrl + '/api/v1/runs/' + $node['Coding Agent Webhook'].json.body.executionId + '/code' }}",
+        "url": "={{ $node['Workflow Config'].json.apiUrl + '/api/v1/runs/' + $node['Parse Incoming Request'].json.executionId + '/code' }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -382,7 +395,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $node['Workflow Config'].json.apiUrl + '/api/v1/runs/' + $node['Coding Agent Webhook'].json.body.executionId + '/execute' }}",
+        "url": "={{ $node['Workflow Config'].json.apiUrl + '/api/v1/runs/' + $node['Parse Incoming Request'].json.executionId + '/execute' }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -416,7 +429,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $node['Workflow Config'].json.apiUrl + '/api/v1/runs/' + $node['Coding Agent Webhook'].json.body.executionId + '/review' }}",
+        "url": "={{ $node['Workflow Config'].json.apiUrl + '/api/v1/runs/' + $node['Parse Incoming Request'].json.executionId + '/review' }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -449,7 +462,7 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ { success: $json.success, executionId: $node['Coding Agent Webhook'].json.body.executionId, codeGeneration: $node['Generate Code'].json, execution: $node['Execute Project'].json, review: $json.data, note: 'With the current environment, execution is expected to end as EXECUTION_UNAVAILABLE until a real runner is configured.' } }}",
+        "responseBody": "={{ { success: $json.success, executionId: $node['Parse Incoming Request'].json.executionId, codeGeneration: $node['Generate Code'].json, execution: $node['Execute Project'].json, review: $json.data, note: 'With the current environment, execution is expected to end as EXECUTION_UNAVAILABLE until a real runner is configured.' } }}",
         "options": {
           "responseCode": 200
         }
@@ -466,7 +479,7 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ { success: true, executionId: $node['Coding Agent Webhook'].json.body.executionId, status: $node['Submit Human Review'].json.data.status, decision: $node['Coding Agent Webhook'].json.body.decision, message: 'Run stopped by human review.' } }}",
+        "responseBody": "={{ { success: true, executionId: $node['Parse Incoming Request'].json.executionId, status: $node['Submit Human Review'].json.data.status, decision: $node['Parse Incoming Request'].json.decision, message: 'Run stopped by human review.' } }}",
         "options": {
           "responseCode": 200
         }
@@ -503,7 +516,7 @@
       "main": [
         [
           {
-            "node": "Workflow Config",
+            "node": "Parse Incoming Request",
             "type": "main",
             "index": 0
           }
@@ -664,6 +677,17 @@
         [
           {
             "node": "Is Start?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Incoming Request": {
+      "main": [
+        [
+          {
+            "node": "Workflow Config",
             "type": "main",
             "index": 0
           }
