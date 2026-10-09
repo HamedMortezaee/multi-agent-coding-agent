@@ -7,7 +7,7 @@ A multi-agent coding assistant orchestrated with **n8n**, backed by **ASP.NET Co
 - **n8n runtime:** n8nir.ir
 - **Backend:** ASP.NET Core
 - **Language:** C#
-- **LLM provider:** OpenAI
+- **LLM provider:** Configurable (`OpenAI` or `Aifa`)
 - **Deployment:** Windows Hosting
 - **Workflow delivery:** Importable n8n JSON
 - **Human-in-the-loop:** n8n
@@ -59,3 +59,42 @@ App_Data/
 The workspace is rebuilt from the canonical files stored in the agent run. Fixer changes are also re-materialized so the on-disk workspace stays synchronized with the latest project state.
 
 The Windows application pool identity must have **Modify/Write** permission on `App_Data/workspaces`.
+
+
+## LLM Provider Selection
+
+The backend uses `ILlmService` and can switch providers without changing the agents.
+
+OpenAI:
+
+```json
+"AI": {
+  "Provider": "OpenAI",
+  "Model": "gpt-5.6-sol"
+}
+```
+
+AIFA:
+
+```json
+"AI": {
+  "Provider": "Aifa",
+  "Model": "gpt-5.6-sol"
+},
+"Aifa": {
+  "BaseUrl": "https://aifa-chatbot.dev.dotin.ir/",
+  "Model": "assistance-model",
+  "Token": "",
+  "UserId": "coding-agent"
+}
+```
+
+For the temporary course setup, the AIFA token can also be set in
+`TemporarySecrets.AifaApiToken`. Do not commit a real token.
+
+Diagnostics:
+
+```text
+GET  /api/v1/diagnostics/llm
+POST /api/v1/diagnostics/llm/test
+```
