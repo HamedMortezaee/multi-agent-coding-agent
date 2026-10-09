@@ -382,17 +382,34 @@ static void ConfigureDotnetEnvironment(
     ProcessStartInfo startInfo,
     string writableRoot)
 {
-    var dotnetHome = Path.Combine(writableRoot, ".dotnet");
-    var nugetPackages = Path.Combine(writableRoot, ".nuget", "packages");
+    var profileRoot = Path.Combine(writableRoot, ".profile");
+    var dotnetHome = Path.Combine(profileRoot, ".dotnet");
+    var nugetPackages = Path.Combine(profileRoot, ".nuget", "packages");
+    var appData = Path.Combine(profileRoot, "AppData", "Roaming");
+    var localAppData = Path.Combine(profileRoot, "AppData", "Local");
+    var temp = Path.Combine(profileRoot, "Temp");
 
+    Directory.CreateDirectory(profileRoot);
     Directory.CreateDirectory(dotnetHome);
     Directory.CreateDirectory(nugetPackages);
+    Directory.CreateDirectory(appData);
+    Directory.CreateDirectory(localAppData);
+    Directory.CreateDirectory(temp);
 
-    startInfo.Environment["DOTNET_CLI_HOME"] = dotnetHome;
+    startInfo.Environment["DOTNET_CLI_HOME"] = profileRoot;
     startInfo.Environment["NUGET_PACKAGES"] = nugetPackages;
     startInfo.Environment["DOTNET_SKIP_FIRST_TIME_EXPERIENCE"] = "1";
     startInfo.Environment["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1";
     startInfo.Environment["DOTNET_NOLOGO"] = "1";
+    startInfo.Environment["DOTNET_ADD_GLOBAL_TOOLS_TO_PATH"] = "0";
+    startInfo.Environment["DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE"] = "1";
+
+    startInfo.Environment["USERPROFILE"] = profileRoot;
+    startInfo.Environment["HOME"] = profileRoot;
+    startInfo.Environment["APPDATA"] = appData;
+    startInfo.Environment["LOCALAPPDATA"] = localAppData;
+    startInfo.Environment["TEMP"] = temp;
+    startInfo.Environment["TMP"] = temp;
 }
 
 static bool FixedTimeEquals(string left, string right)
