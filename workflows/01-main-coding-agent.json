@@ -38,7 +38,7 @@
             {
               "id": "cfg-api-url",
               "name": "apiUrl",
-              "value": "https://n8n.samanooqazvin.com/",
+              "value": "https://n8n.samanooqazvin.com",
               "type": "string"
             },
             {
@@ -462,7 +462,7 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ { success: $json.success, executionId: $node['Parse Incoming Request'].json.executionId, codeGeneration: $node['Generate Code'].json, execution: $node['Execute Project'].json, review: $json.data, note: 'With the current environment, execution is expected to end as EXECUTION_UNAVAILABLE until a real runner is configured.' } }}",
+        "responseBody": "={{ { success: true, executionId: $node['Parse Incoming Request'].json.executionId, status: $node['Generate Final Report'].json.data.status, codeGenerated: true, executionAvailable: $node['Execute Project'].json.data?.available ?? false, executionSuccess: $node['Execute Project'].json.data?.success ?? false, reviewSuccess: $node['Review Result'].json.data?.success ?? false, nextAction: $node['Review Result'].json.data?.nextAction ?? null, summary: $node['Review Result'].json.data?.summary ?? '', reportMarkdown: $node['Generate Final Report'].json.data.markdown } }}",
         "options": {
           "responseCode": 200
         }
@@ -472,7 +472,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        980,
+        1220,
         300
       ]
     },
@@ -508,6 +508,39 @@
       "position": [
         -460,
         500
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $node['Workflow Config'].json.apiUrl + '/api/v1/runs/' + $node['Parse Incoming Request'].json.executionId + '/report' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Agent-Api-Key",
+              "value": "={{ $node['Workflow Config'].json.apiKey }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {} }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "1d07cb01-8e31-4ca6-95bf-e9805d9a0018",
+      "name": "Generate Final Report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        980,
+        300
       ]
     }
   ],
@@ -665,7 +698,7 @@
       "main": [
         [
           {
-            "node": "Respond After Review",
+            "node": "Generate Final Report",
             "type": "main",
             "index": 0
           }
@@ -688,6 +721,17 @@
         [
           {
             "node": "Workflow Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Final Report": {
+      "main": [
+        [
+          {
+            "node": "Respond After Review",
             "type": "main",
             "index": 0
           }
