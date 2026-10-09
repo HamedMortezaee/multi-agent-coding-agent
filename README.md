@@ -89,8 +89,7 @@ AIFA:
 }
 ```
 
-For the temporary course setup, the AIFA token can also be set in
-`TemporarySecrets.AifaApiToken`. Do not commit a real token.
+Provider credentials are read from configuration only. Prefer environment variables or deployment secrets in real environments; do not commit real credentials.
 
 Diagnostics:
 
