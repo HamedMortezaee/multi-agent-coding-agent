@@ -291,28 +291,22 @@ Request:
 }
 ```
 
-Current expected response while no runner exists:
+Execution is delegated to the configured Runner. Example successful response:
 
 ```json
 {
-  "success": false,
+  "success": true,
   "data": {
-    "available": false,
-    "success": false,
-    "exitCode": null,
-    "stdout": "",
+    "available": true,
+    "success": true,
+    "exitCode": 0,
+    "stdout": "Passed! - Failed: 0, Passed: 3",
     "stderr": "",
-    "durationMs": 0,
+    "durationMs": 13292,
     "timedOut": false,
-    "reason": "EXECUTION_UNAVAILABLE"
+    "reason": null
   },
-  "errors": [
-    {
-      "code": "EXECUTION_UNAVAILABLE",
-      "message": "No code execution environment is configured.",
-      "retryable": false
-    }
-  ]
+  "errors": []
 }
 ```
 
@@ -575,13 +569,13 @@ Especially useful for:
 
 # 21. OpenAPI
 
-ASP.NET Core should expose OpenAPI/Swagger in development and test environments.
+Both ASP.NET Core applications expose OpenAPI/Swagger.
 
-Recommended endpoints:
+Implemented endpoints:
 
 ```text
-/swagger
-/openapi/v1.json
+Agent:  https://n8n-agent.samanooqazvin.com/swagger
+Runner: https://n8n-runner.samanooqazvin.com/swagger
 ```
 
 This will also make it easier to validate requests manually before wiring them into n8n.
@@ -621,9 +615,7 @@ These are intentionally excluded from the MVP.
 
 # 24. Implemented Execution Behavior
 
-The execution endpoint and state transitions are implemented.
-
-Current backend behavior without a runner:
+The execution endpoint delegates the current project snapshot to `RemoteExecutionSandbox`, which calls `CodingAgent.Runner`.
 
 ```text
 WaitingForExecution
@@ -632,75 +624,69 @@ POST /execute
   ↓
 Executing
   ↓
+Runner materializes files
+  ↓
+restore / build / test
+  ↓
 ExecutionAttempt recorded
   ↓
 Reviewing
 ```
 
-The HTTP response is currently:
+The Runner returns structured execution data including availability, exit code, stdout, stderr, duration, timeout state and reason.
+
+A validated execution completed with:
 
 ```text
-503 Service Unavailable
-EXECUTION_UNAVAILABLE
+available = true
+success = true
+exitCode = 0
+tests passed = 3
+tests failed = 0
 ```
-
-This response is a known environment limitation, not a generated-code failure.
-
-The n8n workflow should preserve the `executionId` and continue to the Review step when handling this known response so that a controlled final result/report can be produced.
 
 ---
 
-# 25. Reviewer Behavior for Infrastructure Failure
+# 25. Reviewer Behavior
 
-If the latest execution result has:
+Reviewer analyzes the latest real execution result.
 
-```json
-{
-  "available": false,
-  "reason": "EXECUTION_UNAVAILABLE"
-}
-```
-
-Reviewer does not call the LLM.
-
-It deterministically produces:
+Typical success response:
 
 ```json
 {
-  "success": false,
-  "summary": "Generated code could not be executed because no runner is configured.",
-  "nextAction": "fail"
+  "success": true,
+  "issues": [],
+  "summary": "The solution built successfully and all 3 integration tests passed.",
+  "nextAction": "complete"
 }
 ```
 
-This prevents the Fixer from trying to repair source code for an infrastructure problem.
+For a code/test failure, Reviewer may return `fix`. For infrastructure failure it may return `fail` rather than sending an unrelated source-code fix.
 
 ---
 
 # 26. Fix Retry Enforcement
 
-Backend owns the retry counter.
+Backend owns:
 
 ```text
 MaxFixAttempts = 3
 ```
 
-Each successful entry into Fixer increments `FixAttemptCount`.
-
-After applying a fix:
+After a fix:
 
 ```text
-Fixing → WaitingForExecution
+Fixing → WaitingForExecution → Executing → Reviewing
 ```
 
-The next cycle must execute and review the updated project before another fix is allowed.
-
+A new execution/review cycle is required before another fix.
 
 ---
 
 # 27. API Key Enforcement
 
-All routes under:
+All Agent API routes under:
 
 ```text
 /api/*
@@ -712,21 +698,21 @@ require:
 X-Agent-Api-Key: <secret>
 ```
 
-The expected secret is loaded from:
+The expected value is read from:
 
 ```text
-AGENT_API_KEY
+Security:ApiKey
 ```
 
-with `Security:ApiKey` as a configuration fallback.
-
-Missing or invalid credentials return:
+Runner endpoints may require:
 
 ```http
-401 Unauthorized
+X-Runner-Api-Key: <secret>
 ```
 
-The health endpoint is intentionally excluded.
+from `Runner:ApiKey`.
+
+Health endpoints remain public.
 
 ---
 
@@ -740,21 +726,43 @@ Default location:
 App_Data/agent-runs
 ```
 
-Persisted state includes:
+Persisted state includes run status, request, plan, human feedback, generated files, execution attempts, review results, fix summaries, retry count and deadline.
 
-- run status
-- original request
-- plan
-- human feedback
-- generated files and versions
-- execution attempts
-- review results
-- fix summaries
-- retry count
-- deadline
+This is intended for a single Agent API instance. A multi-instance deployment should use a transactional shared store.
 
-Every state-changing Application service explicitly calls `SaveAsync`.
+---
 
-This allows the workflow to resume its state after application restarts.
+# 29. Diagnostics
 
-Current limitation: the file repository is intended for a single application instance. Multi-instance deployment should move persistence to a transactional shared database.
+Agent API exposes lightweight diagnostics so infrastructure can be tested without running the full multi-agent flow:
+
+```text
+GET  /api/v1/diagnostics/llm
+POST /api/v1/diagnostics/llm/test
+GET  /api/v1/diagnostics/runner
+POST /api/v1/diagnostics/runner/execute
+```
+
+This reduces unnecessary LLM usage while troubleshooting provider or Runner connectivity.
+
+---
+
+# 30. Runner API
+
+Runner exposes:
+
+```text
+GET  /health
+GET  /api/v1/diagnostics/dotnet
+POST /api/v1/executions
+```
+
+Supported execution commands are restricted to:
+
+```text
+dotnet restore
+dotnet build
+dotnet test
+```
+
+For `dotnet test`, Runner resolves a solution/test project, performs restore and then executes the tests.
