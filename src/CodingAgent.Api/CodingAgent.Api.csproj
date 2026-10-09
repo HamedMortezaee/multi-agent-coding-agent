@@ -6,6 +6,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\CodingAgent.Application\CodingAgent.Application.csproj" />
     <ProjectReference Include="..\CodingAgent.Domain\CodingAgent.Domain.csproj" />
     <ProjectReference Include="..\CodingAgent.Infrastructure\CodingAgent.Infrastructure.csproj" />
