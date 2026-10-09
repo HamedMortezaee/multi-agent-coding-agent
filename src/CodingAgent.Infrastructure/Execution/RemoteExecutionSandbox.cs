@@ -30,45 +30,78 @@ public sealed class RemoteExecutionSandbox(
             command,
             timeoutSeconds));
 
-        using var response = await httpClient.SendAsync(
-            request,
-            HttpCompletionOption.ResponseHeadersRead,
-            cancellationToken);
-
-        RunnerExecutionResponse? payload;
+        HttpResponseMessage response;
 
         try
         {
-            payload = await response.Content.ReadFromJsonAsync<RunnerExecutionResponse>(
-                cancellationToken: cancellationToken);
+            response = await httpClient.SendAsync(
+                request,
+                HttpCompletionOption.ResponseHeadersRead,
+                cancellationToken);
         }
-        catch
-        {
-            payload = null;
-        }
-
-        if (payload is null)
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             return new ExecutionResult(
                 Available: false,
                 Success: false,
                 ExitCode: null,
                 StandardOutput: string.Empty,
-                StandardError: $"Runner returned HTTP {(int)response.StatusCode}.",
+                StandardError: "Runner request timed out.",
+                DurationMs: 0,
+                TimedOut: true,
+                Reason: "RUNNER_REQUEST_TIMEOUT");
+        }
+        catch (Exception exception)
+        {
+            return new ExecutionResult(
+                Available: false,
+                Success: false,
+                ExitCode: null,
+                StandardOutput: string.Empty,
+                StandardError: exception.Message,
                 DurationMs: 0,
                 TimedOut: false,
-                Reason: "RUNNER_INVALID_RESPONSE");
+                Reason: "RUNNER_UNREACHABLE");
         }
 
-        return new ExecutionResult(
-            payload.Available,
-            payload.Success,
-            payload.ExitCode,
-            payload.Stdout ?? string.Empty,
-            payload.Stderr ?? string.Empty,
-            payload.DurationMs,
-            payload.TimedOut,
-            payload.Reason);
+        using (response)
+        {
+            RunnerExecutionResponse? payload;
+
+            try
+            {
+                payload = await response.Content.ReadFromJsonAsync<RunnerExecutionResponse>(
+                    cancellationToken: cancellationToken);
+            }
+            catch
+            {
+                payload = null;
+            }
+
+            if (payload is null)
+            {
+                return new ExecutionResult(
+                    Available: false,
+                    Success: false,
+                    ExitCode: null,
+                    StandardOutput: string.Empty,
+                    StandardError: $"Runner returned HTTP {(int)response.StatusCode}.",
+                    DurationMs: 0,
+                    TimedOut: false,
+                    Reason: "RUNNER_INVALID_RESPONSE");
+            }
+
+            return new ExecutionResult(
+                payload.Available,
+                payload.Success,
+                payload.ExitCode,
+                payload.Stdout ?? string.Empty,
+                payload.Stderr ?? string.Empty,
+                payload.DurationMs,
+                payload.TimedOut,
+                payload.Reason);
+        }
+
     }
 
     private sealed record RunnerExecutionRequest(
