@@ -1,11 +1,11 @@
 using System.Security.Cryptography;
-using CodingAgent.Api.Configuration;
 using System.Text;
 
 namespace CodingAgent.Api.Security;
 
 public sealed class ApiKeyMiddleware(
-    RequestDelegate next)
+    RequestDelegate next,
+    IConfiguration configuration)
 {
     public async Task InvokeAsync(HttpContext context)
     {
@@ -15,7 +15,26 @@ public sealed class ApiKeyMiddleware(
             return;
         }
 
-        var configuredKey = TemporarySecrets.AgentApiKey;
+        var configuredKey = configuration["Security:ApiKey"]?.Trim();
+
+        if (string.IsNullOrWhiteSpace(configuredKey))
+        {
+            context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+
+            await context.Response.WriteAsJsonAsync(new
+            {
+                success = false,
+                errors = new[]
+                {
+                    new
+                    {
+                        code = "API_KEY_NOT_CONFIGURED",
+                        message = "Security:ApiKey is not configured."
+                    }
+                }
+            });
+            return;
+        }
 
         if (!context.Request.Headers.TryGetValue(
                 "X-Agent-Api-Key",
