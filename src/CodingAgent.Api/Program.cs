@@ -146,6 +146,22 @@ app.MapPost("/api/v1/runs/{executionId:guid}/plan", async (
             "PLANNER_ERROR",
             exception.Message);
     }
+    catch (Exception exception)
+    {
+        return Results.Json(
+            new ApiResponse<object>(
+                false,
+                null,
+                new[]
+                {
+                    new ApiError(
+                        "LLM_PROVIDER_ERROR",
+                        exception.Message,
+                        Retryable: false)
+                },
+                new ApiMeta(executionId, DateTimeOffset.UtcNow)),
+            statusCode: StatusCodes.Status502BadGateway);
+    }
 });
 
 app.MapPost("/api/v1/runs/{executionId:guid}/human-review", async (
