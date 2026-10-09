@@ -12,6 +12,7 @@ A multi-agent coding assistant orchestrated with **n8n**, backed by **ASP.NET Co
 - **Workflow delivery:** Importable n8n JSON
 - **Human-in-the-loop:** n8n
 - **State management:** ASP.NET Core backend
+- **Generated workspace:** `App_Data/workspaces/{executionId:N}` on the API host
 - **Code execution:** Abstracted behind `IExecutionSandbox` (runner currently unavailable)
 - **Max fix attempts:** 3
 - **Max run duration:** 15 minutes
@@ -39,3 +40,22 @@ multi-agent-coding-agent/
 ```
 
 The `workflows` directory will contain n8n workflow JSON files that can be imported into n8nir.ir.
+
+
+## Generated Workspaces
+
+After the Coder agent produces files, the backend materializes the current project snapshot to disk:
+
+```text
+App_Data/
+└── workspaces/
+    └── {executionId:N}/
+        ├── *.sln
+        ├── README.md
+        ├── src/
+        └── tests/
+```
+
+The workspace is rebuilt from the canonical files stored in the agent run. Fixer changes are also re-materialized so the on-disk workspace stays synchronized with the latest project state.
+
+The Windows application pool identity must have **Modify/Write** permission on `App_Data/workspaces`.
