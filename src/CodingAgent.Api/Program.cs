@@ -115,9 +115,8 @@ if (string.Equals(aiProvider, "Aifa", StringComparison.OrdinalIgnoreCase))
     var aifaOptions = new AifaOptions
     {
         BaseUrl = aifaBaseUrl.TrimEnd('/') + "/",
-        Model = string.IsNullOrWhiteSpace(aiModel)
-            ? "assistance-model"
-            : aiModel,
+        Model = builder.Configuration["Aifa:Model"]?.Trim()
+            ?? "assistance-model",
         Token = string.IsNullOrWhiteSpace(builder.Configuration["Aifa:Token"])
             ? TemporarySecrets.AifaApiToken
             : builder.Configuration["Aifa:Token"]!,
@@ -171,12 +170,63 @@ app.MapGet("/health", () => Results.Ok(new
 app.MapGet("/api/v1/diagnostics/llm", (
     ILlmService llmService) =>
 {
+    var effectiveModel = string.Equals(
+        aiProvider,
+        "Aifa",
+        StringComparison.OrdinalIgnoreCase)
+        ? builder.Configuration["Aifa:Model"] ?? "assistance-model"
+        : aiModel;
+
     return Results.Ok(new
     {
         provider = aiProvider,
-        model = aiModel,
-        implementation = llmService.GetType().Name
+        model = effectiveModel,
+        implementation = llmService.GetType().Name,
+        tokenConfigured = string.Equals(
+            aiProvider,
+            "Aifa",
+            StringComparison.OrdinalIgnoreCase)
+            ? !string.IsNullOrWhiteSpace(builder.Configuration["Aifa:Token"]) ||
+              TemporarySecrets.AifaApiToken != "CHANGE_ME_AIFA_API_TOKEN"
+            : TemporarySecrets.OpenAiApiKey != "CHANGE_ME_OPENAI_API_KEY"
     });
+});
+
+app.MapPost("/api/v1/diagnostics/llm/test", async (
+    ILlmService llmService,
+    CancellationToken cancellationToken) =>
+{
+    var startedAt = DateTimeOffset.UtcNow;
+
+    try
+    {
+        var output = await llmService.GenerateTextAsync(
+            "You are a connectivity diagnostic. Return only the word OK.",
+            "Reply with exactly OK.",
+            cancellationToken);
+
+        return Results.Ok(new
+        {
+            success = true,
+            provider = aiProvider,
+            output,
+            startedAt,
+            completedAt = DateTimeOffset.UtcNow
+        });
+    }
+    catch (Exception exception)
+    {
+        return Results.Json(
+            new
+            {
+                success = false,
+                provider = aiProvider,
+                error = exception.Message,
+                startedAt,
+                completedAt = DateTimeOffset.UtcNow
+            },
+            statusCode: StatusCodes.Status502BadGateway);
+    }
 });
 
 app.MapGet("/api/v1/diagnostics/runner", (
