@@ -66,12 +66,33 @@ public sealed class RemoteExecutionSandbox(
 
         using (response)
         {
+            var rawBody = await response.Content.ReadAsStringAsync(cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return new ExecutionResult(
+                    Available: false,
+                    Success: false,
+                    ExitCode: null,
+                    StandardOutput: string.Empty,
+                    StandardError:
+                        $"Runner returned HTTP {(int)response.StatusCode} ({response.ReasonPhrase}). " +
+                        $"Body: {rawBody}",
+                    DurationMs: 0,
+                    TimedOut: false,
+                    Reason: "RUNNER_HTTP_ERROR");
+            }
+
             RunnerExecutionResponse? payload;
 
             try
             {
-                payload = await response.Content.ReadFromJsonAsync<RunnerExecutionResponse>(
-                    cancellationToken: cancellationToken);
+                payload = System.Text.Json.JsonSerializer.Deserialize<RunnerExecutionResponse>(
+                    rawBody,
+                    new System.Text.Json.JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true
+                    });
             }
             catch
             {
@@ -85,7 +106,8 @@ public sealed class RemoteExecutionSandbox(
                     Success: false,
                     ExitCode: null,
                     StandardOutput: string.Empty,
-                    StandardError: $"Runner returned HTTP {(int)response.StatusCode}.",
+                    StandardError:
+                        $"Runner returned an invalid response body. Body: {rawBody}",
                     DurationMs: 0,
                     TimedOut: false,
                     Reason: "RUNNER_INVALID_RESPONSE");
