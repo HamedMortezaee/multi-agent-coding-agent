@@ -25,7 +25,6 @@ builder.Services.Configure<OpenAiOptions>(
     builder.Configuration.GetSection(OpenAiOptions.SectionName));
 
 var aiProvider = builder.Configuration["AI:Provider"]?.Trim() ?? "OpenAI";
-var aiModel = builder.Configuration["AI:Model"]?.Trim() ?? string.Empty;
 
 builder.Services.AddSingleton(TimeProvider.System);
 var persistenceRoot = builder.Configuration["Persistence:RootPath"];
@@ -138,8 +137,24 @@ if (string.Equals(aiProvider, "Aifa", StringComparison.OrdinalIgnoreCase))
 }
 else if (string.Equals(aiProvider, "OpenAI", StringComparison.OrdinalIgnoreCase))
 {
+    var openAiBaseUrl =
+        builder.Configuration["OpenAI:BaseUrl"]?.Trim()
+        ?? "https://api.openai.com/v1/";
+
+    var openAiApiKey =
+        string.IsNullOrWhiteSpace(builder.Configuration["OpenAI:ApiKey"])
+            ? TemporarySecrets.OpenAiApiKey
+            : builder.Configuration["OpenAI:ApiKey"]!;
+
+    var openAiClientOptions = new ResponsesClientOptions
+    {
+        Endpoint = new Uri(openAiBaseUrl.TrimEnd('/') + "/", UriKind.Absolute)
+    };
+
     builder.Services.AddSingleton(
-        _ => new ResponsesClient(TemporarySecrets.OpenAiApiKey));
+        _ => new ResponsesClient(
+            new System.ClientModel.ApiKeyCredential(openAiApiKey),
+            openAiClientOptions));
 
     builder.Services.AddSingleton<ILlmService, OpenAiLlmService>();
 }
@@ -170,25 +185,32 @@ app.MapGet("/health", () => Results.Ok(new
 app.MapGet("/api/v1/diagnostics/llm", (
     ILlmService llmService) =>
 {
-    var effectiveModel = string.Equals(
+    var isAifa = string.Equals(
         aiProvider,
         "Aifa",
-        StringComparison.OrdinalIgnoreCase)
+        StringComparison.OrdinalIgnoreCase);
+
+    var effectiveModel = isAifa
         ? builder.Configuration["Aifa:Model"] ?? "assistance-model"
-        : aiModel;
+        : builder.Configuration["OpenAI:Model"] ?? string.Empty;
+
+    var effectiveBaseUrl = isAifa
+        ? builder.Configuration["Aifa:BaseUrl"]
+        : builder.Configuration["OpenAI:BaseUrl"];
+
+    var credentialConfigured = isAifa
+        ? !string.IsNullOrWhiteSpace(builder.Configuration["Aifa:Token"]) ||
+          TemporarySecrets.AifaApiToken != "CHANGE_ME_AIFA_API_TOKEN"
+        : !string.IsNullOrWhiteSpace(builder.Configuration["OpenAI:ApiKey"]) ||
+          TemporarySecrets.OpenAiApiKey != "CHANGE_ME_OPENAI_API_KEY";
 
     return Results.Ok(new
     {
         provider = aiProvider,
         model = effectiveModel,
+        baseUrl = effectiveBaseUrl,
         implementation = llmService.GetType().Name,
-        tokenConfigured = string.Equals(
-            aiProvider,
-            "Aifa",
-            StringComparison.OrdinalIgnoreCase)
-            ? !string.IsNullOrWhiteSpace(builder.Configuration["Aifa:Token"]) ||
-              TemporarySecrets.AifaApiToken != "CHANGE_ME_AIFA_API_TOKEN"
-            : TemporarySecrets.OpenAiApiKey != "CHANGE_ME_OPENAI_API_KEY"
+        tokenConfigured = credentialConfigured
     });
 });
 
