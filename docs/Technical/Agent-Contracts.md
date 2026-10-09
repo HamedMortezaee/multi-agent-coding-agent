@@ -345,6 +345,9 @@ delete
 - Absolute paths are rejected.
 - File content must be text for MVP.
 - Duplicate paths are rejected.
+- Initial Coder output must use operation `create`.
+- Coder is instructed to include at least one automated xUnit test project.
+- Coder should include a solution containing both API and tests when practical.
 
 ---
 
@@ -372,7 +375,7 @@ Fields:
 
 # 10. Execution Request Contract
 
-The contract is defined now even though the execution runner is not yet available.
+The execution contract is implemented and backed by CodingAgent.Runner.
 
 ```json
 {
@@ -399,19 +402,32 @@ The contract is defined now even though the execution runner is not yet availabl
 }
 ```
 
-When no execution environment is available:
+Successful real execution example:
 
 ```json
 {
-  "available": false,
-  "success": false,
-  "exitCode": null,
-  "stdout": "",
+  "available": true,
+  "success": true,
+  "exitCode": 0,
+  "stdout": "Passed! - Failed: 0, Passed: 3",
   "stderr": "",
-  "durationMs": 0,
+  "durationMs": 13292,
   "timedOut": false,
-  "reason": "EXECUTION_UNAVAILABLE"
+  "reason": null
 }
+```
+
+Representative infrastructure or execution reasons include:
+
+```text
+RUNNER_UNREACHABLE
+RUNNER_HTTP_ERROR
+RUNNER_REQUEST_TIMEOUT
+RUNNER_INVALID_RESPONSE
+TEST_PROJECT_NOT_FOUND
+RESTORE_FAILED
+PROCESS_EXIT_NONZERO
+EXECUTION_TIMEOUT
 ```
 
 ---
@@ -639,3 +655,63 @@ Future breaking API changes should use:
 ```
 
 rather than silently changing v1 semantics.
+
+
+---
+
+# 20. Runner Execution Contract
+
+Agent API sends the current project snapshot to CodingAgent.Runner.
+
+Request shape:
+
+```json
+{
+  "executionId": "49fb20b7-8b64-4e26-aaf9-78d99215b419",
+  "files": [
+    {
+      "path": "TodoApi/Program.cs",
+      "content": "..."
+    }
+  ],
+  "command": "dotnet test",
+  "timeoutSeconds": 120
+}
+```
+
+Allowed command values:
+
+```text
+dotnet restore
+dotnet build
+dotnet test
+```
+
+For `dotnet test`, Runner resolves a solution or test project before execution.
+
+---
+
+# 21. Validated Success Contract
+
+A validated end-to-end Todo API run produced:
+
+```json
+{
+  "executionId": "fc30d504-9248-4413-81ee-f0e200a96c4a",
+  "status": "Completed",
+  "execution": {
+    "available": true,
+    "success": true,
+    "exitCode": 0,
+    "timedOut": false,
+    "reason": null
+  },
+  "review": {
+    "success": true,
+    "issues": [],
+    "nextAction": "complete"
+  }
+}
+```
+
+The execution output reported three passed integration tests and zero failed tests.
