@@ -60,7 +60,7 @@
           "conditions": [
             {
               "id": "cond-start",
-              "leftValue": "={{ $json.body.action }}",
+              "leftValue": "={{ $node['Coding Agent Webhook'].json.body?.action || $node['Coding Agent Webhook'].json.action }}",
               "rightValue": "start",
               "operator": {
                 "type": "string",
@@ -96,7 +96,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { request: $node['Coding Agent Webhook'].json.body.request, requestedBy: $node['Coding Agent Webhook'].json.body.requestedBy || 'n8n' } }}",
+        "jsonBody": "={{ { request: ($node['Coding Agent Webhook'].json.body?.request || $node['Coding Agent Webhook'].json.request), requestedBy: ($node['Coding Agent Webhook'].json.body?.requestedBy || $node['Coding Agent Webhook'].json.requestedBy || 'n8n') } }}",
         "options": {
           "response": {
             "response": {
@@ -176,7 +176,7 @@
           "conditions": [
             {
               "id": "cond-review",
-              "leftValue": "={{ $node['Coding Agent Webhook'].json.body.action }}",
+              "leftValue": "={{ $node['Coding Agent Webhook'].json.body?.action || $node['Coding Agent Webhook'].json.action }}",
               "rightValue": "review",
               "operator": {
                 "type": "string",
@@ -212,7 +212,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { decision: $node['Coding Agent Webhook'].json.body.decision, feedback: $node['Coding Agent Webhook'].json.body.feedback || null } }}",
+        "jsonBody": "={{ { decision: ($node['Coding Agent Webhook'].json.body?.decision || $node['Coding Agent Webhook'].json.decision), feedback: ($node['Coding Agent Webhook'].json.body?.feedback || $node['Coding Agent Webhook'].json.feedback || null) } }}",
         "options": {
           "response": {
             "response": {
@@ -242,7 +242,7 @@
           "conditions": [
             {
               "id": "cond-modify",
-              "leftValue": "={{ $node['Coding Agent Webhook'].json.body.decision }}",
+              "leftValue": "={{ $node['Coding Agent Webhook'].json.body?.decision || $node['Coding Agent Webhook'].json.decision }}",
               "rightValue": "modify",
               "operator": {
                 "type": "string",
@@ -325,7 +325,7 @@
           "conditions": [
             {
               "id": "cond-approve",
-              "leftValue": "={{ $node['Coding Agent Webhook'].json.body.decision }}",
+              "leftValue": "={{ $node['Coding Agent Webhook'].json.body?.decision || $node['Coding Agent Webhook'].json.decision }}",
               "rightValue": "approve",
               "operator": {
                 "type": "string",
