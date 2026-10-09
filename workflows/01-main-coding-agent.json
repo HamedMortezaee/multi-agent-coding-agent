@@ -115,7 +115,8 @@
             "response": {
               "responseFormat": "json"
             }
-          }
+          },
+          "allowUnauthorizedCerts": true
         }
       },
       "id": "1d07cb01-8e31-4ca6-95bf-e9805d9a0003",
@@ -148,7 +149,8 @@
             "response": {
               "responseFormat": "json"
             }
-          }
+          },
+          "allowUnauthorizedCerts": true
         }
       },
       "id": "1d07cb01-8e31-4ca6-95bf-e9805d9a0004",
@@ -231,7 +233,8 @@
             "response": {
               "responseFormat": "json"
             }
-          }
+          },
+          "allowUnauthorizedCerts": true
         }
       },
       "id": "1d07cb01-8e31-4ca6-95bf-e9805d9a0007",
@@ -297,7 +300,8 @@
             "response": {
               "responseFormat": "json"
             }
-          }
+          },
+          "allowUnauthorizedCerts": true
         }
       },
       "id": "1d07cb01-8e31-4ca6-95bf-e9805d9a0009",
@@ -380,7 +384,8 @@
             "response": {
               "responseFormat": "json"
             }
-          }
+          },
+          "allowUnauthorizedCerts": true
         }
       },
       "id": "1d07cb01-8e31-4ca6-95bf-e9805d9a0012",
@@ -414,7 +419,8 @@
               "neverError": true,
               "responseFormat": "json"
             }
-          }
+          },
+          "allowUnauthorizedCerts": true
         }
       },
       "id": "1d07cb01-8e31-4ca6-95bf-e9805d9a0013",
@@ -447,7 +453,8 @@
             "response": {
               "responseFormat": "json"
             }
-          }
+          },
+          "allowUnauthorizedCerts": true
         }
       },
       "id": "1d07cb01-8e31-4ca6-95bf-e9805d9a0014",
@@ -531,7 +538,8 @@
             "response": {
               "responseFormat": "json"
             }
-          }
+          },
+          "allowUnauthorizedCerts": true
         }
       },
       "id": "1d07cb01-8e31-4ca6-95bf-e9805d9a0018",
