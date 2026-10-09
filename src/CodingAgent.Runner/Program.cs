@@ -237,7 +237,19 @@ app.MapPost("/api/v1/executions", async (
                 Reason: "TEST_PROJECT_NOT_FOUND"));
         }
 
-        arguments = ["test", testTarget, "--nologo"];
+        arguments = ["test", testTarget, "--nologo", "--no-restore"];
+    }
+
+    if (string.Equals(request.Command?.Trim(), "dotnet test", StringComparison.OrdinalIgnoreCase))
+    {
+        var restoreResult = await RestoreTestTargetAsync(
+            workspacePath,
+            arguments[1],
+            timeoutSeconds,
+            cancellationToken);
+
+        if (!restoreResult.Success)
+            return Results.Ok(restoreResult);
     }
 
     var startedAt = Stopwatch.StartNew();
@@ -437,6 +449,123 @@ static void MaterializeWorkspace(
     }
 }
 
+static async Task<RunnerExecutionResponse> RestoreTestTargetAsync(
+    string workspacePath,
+    string testTarget,
+    int timeoutSeconds,
+    CancellationToken cancellationToken)
+{
+    var startedAt = Stopwatch.StartNew();
+
+    using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+    timeoutCts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
+
+    using var process = new Process
+    {
+        StartInfo = new ProcessStartInfo
+        {
+            FileName = "dotnet",
+            WorkingDirectory = workspacePath,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        }
+    };
+
+    process.StartInfo.ArgumentList.Add("restore");
+    process.StartInfo.ArgumentList.Add(testTarget);
+    process.StartInfo.ArgumentList.Add("--nologo");
+    process.StartInfo.ArgumentList.Add("--force");
+    process.StartInfo.ArgumentList.Add("--no-http-cache");
+    process.StartInfo.ArgumentList.Add("--disable-parallel");
+
+    ConfigureDotnetEnvironment(process.StartInfo, workspacePath);
+
+    try
+    {
+        if (!process.Start())
+        {
+            return new RunnerExecutionResponse(
+                Available: false,
+                Success: false,
+                ExitCode: null,
+                Stdout: string.Empty,
+                Stderr: "dotnet restore process could not be started.",
+                DurationMs: startedAt.ElapsedMilliseconds,
+                TimedOut: false,
+                Reason: "RESTORE_PROCESS_START_FAILED");
+        }
+
+        var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
+
+        try
+        {
+            await process.WaitForExitAsync(timeoutCts.Token);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                if (!process.HasExited)
+                    process.Kill(entireProcessTree: true);
+            }
+            catch
+            {
+            }
+
+            return new RunnerExecutionResponse(
+                Available: true,
+                Success: false,
+                ExitCode: null,
+                Stdout: await stdoutTask,
+                Stderr: await stderrTask,
+                DurationMs: startedAt.ElapsedMilliseconds,
+                TimedOut: true,
+                Reason: "RESTORE_TIMEOUT");
+        }
+
+        var stdout = await stdoutTask;
+        var stderr = await stderrTask;
+
+        if (process.ExitCode != 0)
+        {
+            return new RunnerExecutionResponse(
+                Available: true,
+                Success: false,
+                ExitCode: process.ExitCode,
+                Stdout: stdout,
+                Stderr: stderr,
+                DurationMs: startedAt.ElapsedMilliseconds,
+                TimedOut: false,
+                Reason: "RESTORE_FAILED");
+        }
+
+        return new RunnerExecutionResponse(
+            Available: true,
+            Success: true,
+            ExitCode: 0,
+            Stdout: stdout,
+            Stderr: stderr,
+            DurationMs: startedAt.ElapsedMilliseconds,
+            TimedOut: false,
+            Reason: null);
+    }
+    catch (Exception exception)
+    {
+        return new RunnerExecutionResponse(
+            Available: false,
+            Success: false,
+            ExitCode: null,
+            Stdout: string.Empty,
+            Stderr: exception.Message,
+            DurationMs: startedAt.ElapsedMilliseconds,
+            TimedOut: false,
+            Reason: "RESTORE_EXECUTION_ERROR");
+    }
+}
+
 static string? ResolveTestTarget(string workspacePath)
 {
     static bool IsBuildArtifact(string path) =>
@@ -480,7 +609,13 @@ static void ConfigureDotnetEnvironment(
 {
     var profileRoot = Path.Combine(writableRoot, ".profile");
     var dotnetHome = Path.Combine(profileRoot, ".dotnet");
-    var nugetPackages = Path.Combine(profileRoot, ".nuget", "packages");
+
+    // Keep NuGet packages outside the per-execution workspace.
+    // MaterializeWorkspace deletes/recreates the execution folder for every run,
+    // so a cache inside that folder can be lost or left partially extracted.
+    var runnerDataRoot = Path.Combine(AppContext.BaseDirectory, "RunnerData");
+    var nugetPackages = Path.Combine(runnerDataRoot, "nuget-packages");
+
     var appData = Path.Combine(profileRoot, "AppData", "Roaming");
     var localAppData = Path.Combine(profileRoot, "AppData", "Local");
     var temp = Path.Combine(profileRoot, "Temp");
