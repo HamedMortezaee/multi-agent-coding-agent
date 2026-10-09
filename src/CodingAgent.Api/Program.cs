@@ -565,8 +565,8 @@ app.MapPost("/api/v1/runs/{executionId:guid}/execute", async (
                     {
                         new ApiError(
                             "EXECUTION_UNAVAILABLE",
-                            "No code execution environment is configured.",
-                            Retryable: false)
+                            $"Runner is unavailable. Reason: {result.Reason ?? "unknown"}. {result.StandardError}",
+                            Retryable: result.Reason is "RUNNER_UNREACHABLE" or "RUNNER_REQUEST_TIMEOUT")
                     },
                     new ApiMeta(executionId, DateTimeOffset.UtcNow)),
                 statusCode: StatusCodes.Status503ServiceUnavailable);
