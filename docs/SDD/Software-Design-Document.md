@@ -1,197 +1,192 @@
 # Software Design Document
 ## Multi-Agent Coding Agent
 
-**Version:** 1.0  
-**Status:** Baseline  
-**Date:** 2026-10-03
+**Version:** 2.0  
+**Status:** Implemented / Validated  
+**Date:** 2026-10-09
 
 ---
 
 # 1. Purpose
 
-The system receives a software-development request and coordinates multiple agents to plan, generate, review, fix and report the result.
+The system receives a natural-language software-development request and coordinates multiple agents to plan, generate, execute, review, fix and report the result.
 
 ```text
-Requirement
+User Request
     ↓
-Planning
+Planner
     ↓
 Human Review
     ↓
-Code Generation
+Coder
     ↓
-Execution
+Real Execution
     ↓
-Testing / Review
+Reviewer
     ↓
-Fixing
+Fixer (when needed)
     ↓
-Final Result
+Final Report
 ```
-
----
 
 # 2. Scope
 
 The MVP targets small ASP.NET Core Web API projects.
 
-Primary demo scenario:
+Validated demo scenario:
 
 ```text
 Todo REST API
+.NET 9
+Swagger
+EF Core InMemory
+xUnit integration tests
 ```
 
----
-
-# 3. Actors
-
-## User
-Provides the initial development request.
-
-## Human Reviewer
-Reviews the generated plan and can approve, reject or modify it.
+# 3. Main Components
 
 ## n8n
-Orchestrates workflow transitions.
+Owns orchestration and routing between backend steps.
 
-## ASP.NET Core Backend
-Provides APIs, OpenAI integration, state, workspace and file services.
+## CodingAgent.Api
+Owns:
+- run state and transitions
+- Planner, Coder, Reviewer and Fixer services
+- human-review decisions
+- LLM provider selection
+- generated files
+- execution history
+- retry/timeout rules
+- final Markdown report
 
-## OpenAI
-Provides LLM capabilities.
+## CodingAgent.Runner
+Executes generated .NET projects using a separate Windows application.
 
-## Code Execution Environment
-Will execute generated code when a runner becomes available.
+Supported commands:
 
----
+```text
+dotnet restore
+dotnet build
+dotnet test
+```
+
+## LLM Providers
+
+```text
+ILlmService
+ ├── OpenAiLlmService
+ └── AifaLlmService
+```
+
+Provider selection is configuration-driven.
 
 # 4. Functional Requirements
 
 ## FR-001 — Receive Request
-The system must accept a text requirement.
+Accept a natural-language development request.
 
-## FR-002 — Generate Plan
-Planner must produce a structured implementation plan.
-
-Example:
-
-```json
-{
-  "goal": "Create Todo REST API",
-  "steps": [
-    {
-      "order": 1,
-      "title": "Create project"
-    }
-  ],
-  "ambiguities": [],
-  "requiresHumanReview": true
-}
-```
+## FR-002 — Planning
+Planner produces a structured goal, steps, assumptions and ambiguities.
 
 ## FR-003 — Human Review
-The workflow must allow a human to approve, reject, modify or add feedback after planning.
+After planning, a human can:
+- approve
+- modify
+- reject
 
-## FR-004 — Generate Code
-Coder must output structured project files rather than one unstructured text block.
+The state is persisted so the workflow can resume later with the same ExecutionId.
 
-Example:
+## FR-004 — Code Generation
+Coder generates complete text project files using relative safe paths.
 
-```json
-{
-  "files": [
-    {
-      "path": "Todo.Api/Program.cs",
-      "content": "..."
-    }
-  ]
-}
+Coder is instructed to generate:
+- ASP.NET Core project
+- solution/project files
+- automated xUnit tests
+
+## FR-005 — Real Code Execution
+Generated code is sent to CodingAgent.Runner and actually restored, built and tested.
+
+## FR-006 — Review
+Reviewer analyzes the real execution result and returns one of:
+
+```text
+complete
+fix
+fail
 ```
 
-## FR-005 — Execute Code
-Generated code should be built/run/tested in an isolated execution environment.
-
-Current status: blocked because no execution environment is available.
-
-## FR-006 — Review Execution
-Tester/Reviewer analyzes compilation, runtime and test results.
-
-## FR-007 — Fix Failed Code
-Fixer receives current files, previous attempts and latest errors and produces corrective changes.
+## FR-007 — Fix
+Fixer receives current files, latest errors and previous attempts, applies changes and returns the run to execution.
 
 ## FR-008 — Retry Limit
-Maximum fix attempts: 3.
+
+```text
+MaxFixAttempts = 3
+```
 
 ## FR-009 — Global Timeout
-Maximum run duration: 15 minutes.
+
+```text
+MaxRunDuration = 15 minutes
+```
 
 ## FR-010 — Final Report
-Every run must produce a final Markdown report, including controlled failures.
-
----
+Every completed or controlled-failure run can produce a Markdown report.
 
 # 5. High-Level Architecture
 
 ```text
-                       ┌───────────────┐
-                       │     User      │
-                       └───────┬───────┘
-                               │
-                               ▼
-                      ┌────────────────┐
-                      │   n8nir.ir     │
-                      │      n8n       │
-                      └───────┬────────┘
-                              │
-          ┌───────────────────┼─────────────────┐
-          │                   │                 │
-          ▼                   ▼                 ▼
-      Planner              Coder         Tester/Fixer
-          │                   │                 │
-          └───────────────────┼─────────────────┘
-                              │
-                              ▼
-                   ┌────────────────────┐
-                   │ ASP.NET Core API   │
-                   └─────────┬──────────┘
-                             │
-          ┌──────────────────┼─────────────────┐
-          │                  │                 │
-          ▼                  ▼                 ▼
-      OpenAI              State            Workspace
-      Service             Store            Manager
-                                                │
-                                                ▼
-                                      IExecutionSandbox
-                                                │
-                                                ▼
-                                        Future Runner
+                       User
+                        │
+                        ▼
+                       n8n
+                        │
+                        ▼
+                CodingAgent.Api
+        ┌───────────────┼────────────────┐
+        │               │                │
+        ▼               ▼                ▼
+     Agents          State Store      Workspace
+        │
+        ├───────────────► ILlmService
+        │                  ├─ OpenAI
+        │                  └─ AIFA
+        │
+        └───────────────► IExecutionSandbox
+                           │
+                           ▼
+                  RemoteExecutionSandbox
+                           │ HTTPS
+                           ▼
+                  CodingAgent.Runner
+                           │
+                           ▼
+               restore / build / test
 ```
-
----
 
 # 6. Deployment Architecture
 
 ```text
-                    Internet
-                       │
-          ┌────────────┴────────────┐
-          │                         │
-          ▼                         ▼
-     n8nir.ir                Windows Hosting
-       n8n                   ASP.NET Core API
-          │                         │
-          └──────────HTTPS──────────┘
-                                    │
-                                    ▼
-                                OpenAI API
+n8n
+ │
+ │ HTTPS/JSON
+ ▼
+CodingAgent.Api
+https://n8n-agent.samanooqazvin.com
+ │
+ ├────► LLM Provider
+ │
+ └────► CodingAgent.Runner
+        https://n8n-runner.samanooqazvin.com
+             │
+             ▼
+        .NET SDK execution
 ```
 
-Windows Hosting is API-only and must not be used for arbitrary process execution.
+The Agent API and Runner are separate applications.
 
----
-
-# 7. ASP.NET Core Solution Structure
+# 7. Solution Structure
 
 ```text
 CodingAgent.sln
@@ -200,61 +195,32 @@ src/
  ├── CodingAgent.Api
  ├── CodingAgent.Application
  ├── CodingAgent.Domain
- └── CodingAgent.Infrastructure
+ ├── CodingAgent.Infrastructure
+ └── CodingAgent.Runner
 
-tests/
- ├── CodingAgent.UnitTests
- └── CodingAgent.IntegrationTests
+workflows/
+ └── 01-main-coding-agent.json
 ```
 
----
-
-# 8. Domain Model
+# 8. Domain State
 
 ## AgentRun
 
 ```text
 ExecutionId
 UserRequest
+RequestedBy
 Status
 StartedAt
 Deadline
+Plan
+HumanFeedback
+Files
+Attempts
 FixAttemptCount
 ```
 
-## AgentPlan
-
-```text
-Goal
-Steps
-Ambiguities
-RequiresHumanReview
-Approved
-```
-
-## ProjectFile
-
-```text
-Path
-Content
-Version
-```
-
-## ExecutionAttempt
-
-```text
-AttemptNumber
-StartedAt
-CompletedAt
-ExitCode
-StdOut
-StdErr
-Success
-```
-
----
-
-# 9. Run Status
+## Run Status
 
 ```text
 Created
@@ -270,436 +236,279 @@ Failed
 TimedOut
 ```
 
----
+# 9. Persistence
 
-# 10. Agent State
+Run state is persisted through `IAgentRunRepository`.
 
-Example:
+MVP implementation:
 
-```json
-{
-  "executionId": "...",
-  "status": "Fixing",
-  "userRequest": "...",
-  "plan": {},
-  "humanFeedback": "...",
-  "files": [],
-  "executionAttempts": [],
-  "fixAttemptCount": 2,
-  "startedAt": "...",
-  "deadline": "..."
-}
+```text
+App_Data/agent-runs
 ```
 
----
+This survives application restarts but is intended for a single Agent API instance.
+
+# 10. Workspace Design
+
+Agent API workspace:
+
+```text
+App_Data/workspaces/{executionId:N}
+```
+
+Runner workspace:
+
+```text
+RunnerData/workspaces/{executionId:N}
+```
+
+Runner NuGet cache:
+
+```text
+RunnerData/nuget-packages
+```
+
+The Runner re-materializes the supplied file snapshot for each execution.
 
 # 11. LLM Architecture
 
 ```text
 Planner
 Coder
-Tester
+Reviewer
 Fixer
    │
    ▼
 ILlmService
-   │
-   ▼
-OpenAiLlmService
-   │
-   ▼
-OpenAI API
+ ├── OpenAiLlmService
+ └── AifaLlmService
 ```
 
-Agent business logic must not call the OpenAI SDK directly.
+Agent business logic does not directly depend on an external provider SDK.
 
----
-
-# 12. Planner Contract
-
-## Input
-
-```json
-{
-  "userRequest": "..."
-}
-```
-
-## Output
-
-```json
-{
-  "goal": "...",
-  "steps": [
-    {
-      "order": 1,
-      "title": "...",
-      "description": "..."
-    }
-  ],
-  "ambiguities": [],
-  "requiresHumanReview": true
-}
-```
-
----
-
-# 13. Coder Contract
-
-## Input
-
-```json
-{
-  "userRequest": "...",
-  "plan": {},
-  "humanFeedback": null,
-  "currentFiles": []
-}
-```
-
-## Output
-
-```json
-{
-  "files": [
-    {
-      "path": "...",
-      "content": "..."
-    }
-  ]
-}
-```
-
----
-
-# 14. Tester Contract
-
-```json
-{
-  "success": false,
-  "issues": [
-    {
-      "severity": "Error",
-      "type": "Compilation",
-      "message": "..."
-    }
-  ],
-  "nextAction": "fix"
-}
-```
-
----
-
-# 15. Fixer Contract
-
-## Input
-
-```json
-{
-  "currentFiles": [],
-  "latestExecutionResult": {},
-  "previousAttempts": []
-}
-```
-
-## Output
-
-```json
-{
-  "changes": [
-    {
-      "path": "...",
-      "content": "...",
-      "reason": "..."
-    }
-  ]
-}
-```
-
----
-
-# 16. API Design
-
-Initial API surface:
+# 12. Execution Architecture
 
 ```text
-POST /api/runs
-GET  /api/runs/{id}
-
-POST /api/runs/{id}/plan
-POST /api/runs/{id}/approve
-POST /api/runs/{id}/generate
-POST /api/runs/{id}/execute
-POST /api/runs/{id}/review
-POST /api/runs/{id}/fix
-
-GET  /api/runs/{id}/report
+Application
+    │
+    ▼
+IExecutionSandbox
+    │
+    ▼
+RemoteExecutionSandbox
+    │
+    ▼
+POST Runner /api/v1/executions
+    │
+    ▼
+dotnet restore/build/test
 ```
 
----
-
-# 17. Main n8n Workflow
+Runner execution results include:
 
 ```text
-Webhook / Form
-      ↓
-Create Run
-      ↓
+Available
+Success
+ExitCode
+Stdout
+Stderr
+DurationMs
+TimedOut
+Reason
+```
+
+# 13. Test Target Resolution
+
+For `dotnet test`, Runner:
+1. materializes files,
+2. resolves a solution or test project,
+3. performs a deterministic restore,
+4. executes test with `--no-restore`.
+
+If no test target is available, it returns:
+
+```text
+TEST_PROJECT_NOT_FOUND
+```
+
+# 14. Human-in-the-loop
+
+Human review uses durable state/resume.
+
+```text
+Start
+ ↓
 Planner
+ ↓
+WaitingForHuman
+ ↓
+workflow ends
+
+Review request
+ ↓
+same ExecutionId resumes
+ ↓
+Coder
+```
+
+This avoids keeping a hosted n8n execution open during human wait time.
+
+# 15. Fix Loop
+
+```text
+Execute
+ ↓
+Reviewer
+ ↓
+nextAction
+ ├── complete → Final Report
+ ├── fail     → Final Report
+ └── fix
       ↓
-Requires Human?
-   /           \
- Yes            No
- ↓               │
-Wait Approval    │
- ↓               │
- └───────┬───────┘
-         ↓
-       Coder
-         ↓
-     Save Files
-         ↓
-      Execute
-         ↓
-       Tester
-         ↓
-      Success?
-      /      \
-    Yes       No
-     ↓         ↓
-Report       Retry Check
-               ↓
-          attempt < 3 ?
-            /      \
-          Yes       No
-           ↓         ↓
-         Fixer      Failure
-           ↓
-       Save Changes
-           ↓
-         Execute
+    Fixer
+      ↓
+    Execute
+      ↓
+    Reviewer
 ```
 
----
+Backend state is the source of truth for fix count and timeout.
 
-# 18. n8n Workflow Delivery
+# 16. API Surface
 
-Workflow files will be committed under:
+Base path:
 
 ```text
-workflows/
+/api/v1
 ```
 
-Expected files:
+Main endpoints:
 
 ```text
-01-main-coding-agent.json
-02-human-approval.json
-03-final-report.json
+POST /runs
+GET  /runs/{executionId}
+POST /runs/{executionId}/plan
+POST /runs/{executionId}/human-review
+POST /runs/{executionId}/code
+POST /runs/{executionId}/execute
+POST /runs/{executionId}/review
+POST /runs/{executionId}/fix
+GET  /runs/{executionId}/attempts
+POST /runs/{executionId}/report
+GET  /runs/{executionId}/report
 ```
 
-Credentials and secrets must not be committed.
+Diagnostics:
 
----
+```text
+GET  /diagnostics/llm
+POST /diagnostics/llm/test
+GET  /diagnostics/runner
+POST /diagnostics/runner/execute
+```
 
-# 19. Security
+# 17. Security
 
-## n8n → ASP.NET Core
-Use API authentication, initially an API key header:
+Agent API routes under `/api/*` use:
 
 ```http
-X-Agent-Api-Key: ***
+X-Agent-Api-Key: <secret>
 ```
 
-## OpenAI API Key
-Must never be stored in:
-- source code
-- workflow JSON
-- GitHub repository
-- reports
+Runner can use:
 
-## Workspace Paths
-Reject path traversal such as:
+```http
+X-Runner-Api-Key: <secret>
+```
+
+Secrets must come from deployment configuration and must not be committed.
+
+Generated paths reject traversal and absolute paths.
+
+Generated code is untrusted.
+
+The current Windows Runner is an execution runner, not a hardened sandbox.
+
+# 18. Swagger
+
+Agent API:
 
 ```text
-../../
+https://n8n-agent.samanooqazvin.com/swagger
 ```
 
-## Generated Code
-Generated code must be treated as untrusted.
-
----
-
-# 20. Observability
-
-All logs should include:
+Runner API:
 
 ```text
-ExecutionId
-Agent
-Attempt
-Status
-Duration
+https://n8n-runner.samanooqazvin.com/swagger
 ```
 
----
-
-# 21. Error Classification
-
-```text
-AgentError
-LlmError
-ValidationError
-ExecutionError
-TimeoutError
-InfrastructureError
-```
-
----
-
-# 22. Reporting
+# 19. Reporting
 
 Final report format: Markdown.
 
-Sections:
+Sections include:
 
 ```text
+Execution Metadata
 User Request
-Approved Plan
-Generated Files
+Plan
+Human Feedback
+Generated Project Files
 Execution Attempts
-Errors
-Fix Attempts
+Reviewer Result
+Fix History
 Final Result
 ```
 
-Failure runs must still produce a report.
+# 20. Validated End-to-End Run
 
----
-
-# 23. Short-Term Memory
-
-Required state includes:
-- Plan
-- Files
-- Errors
-- Attempts
-- Human feedback
-
----
-
-# 24. Long-Term Memory
-
-Not part of the MVP.
-
-Possible future data:
-- successful fix patterns
-- known errors
-- previous solutions
-
----
-
-# 25. GitHub Integration
-
-Post-MVP:
+Validated execution:
 
 ```text
-Generate Files
- ↓
-Create Branch
- ↓
-Commit
- ↓
-Push
- ↓
-Pull Request
+ExecutionId: fc30d504-9248-4413-81ee-f0e200a96c4a
+Status: Completed
+ExitCode: 0
+Tests Passed: 3
+Tests Failed: 0
+Reviewer Success: true
+Reviewer NextAction: complete
+Fix Attempts: 0
 ```
 
----
+The generated Todo API was built and its integration tests executed successfully.
 
-# 26. Known Blocker
-
-## BLK-001 — Code Execution Environment
-
-Current environment:
+# 21. Definition of Done
 
 ```text
-Windows Hosting: API hosting only
-n8nir.ir: Workflow runtime
-Sandbox: unavailable
-Docker: unavailable
-Remote Runner: unavailable
+User Request             ✓
+Planner                  ✓
+Human Review             ✓
+Coder                    ✓
+State Persistence        ✓
+Physical Workspace       ✓
+Real Code Execution      ✓
+dotnet restore           ✓
+dotnet build             ✓
+dotnet test              ✓
+Reviewer                 ✓
+Fix Loop                 ✓
+Maximum 3 Fix Attempts   ✓
+15-Minute Limit          ✓
+Final Report             ✓
+n8n Workflow             ✓
+OpenAI Provider          ✓
+AIFA Provider            ✓
+Swagger                  ✓
+Windows Deployment       ✓
 ```
 
-Impact:
+# 22. Remaining Hardening
 
-```text
-Generated code cannot currently be built,
-executed and tested in an isolated environment.
-```
-
-This is the main blocker for full compliance with the real-code-execution requirement.
-
----
-
-# 27. Implementation Phases
-
-## Phase 1
-- ASP.NET Core solution
-- Domain models
-- State management
-- Basic API
-
-## Phase 2
-- OpenAI integration
-- Planner
-- Coder
-- Tester
-- Fixer
-
-## Phase 3
-- n8n main workflow
-- Human-in-the-loop
-- Retry logic
-- Timeout
-
-## Phase 4
-- Report generation
-- Logging
-- Error handling
-
-## Phase 5
-- Execution runner
-
-## Phase 6
-- GitHub integration
-- Long-term memory
-- Smart human stop
-
----
-
-# 28. Definition of Done
-
-MVP functional baseline:
-
-```text
-User Request            ✓
-Planner                 ✓
-Human Approval          ✓
-Coder                   ✓
-State Management        ✓
-Tester                  ✓
-Fixer                   ✓
-Maximum 3 Retries       ✓
-15 Minute Limit         ✓
-Final Report            ✓
-n8n JSON Import         ✓
-ASP.NET Core Deployment ✓
-OpenAI Integration      ✓
-```
-
-Full project compliance additionally requires:
-
-```text
-Real Code Execution
-```
+The MVP is operational. Production hardening would include:
+- hardened isolated sandbox/container execution
+- transactional shared database for multi-instance state
+- proper TLS certificate validation everywhere
+- secret vault/environment-secret management
+- workspace cleanup/retention policy
+- richer observability and metrics
