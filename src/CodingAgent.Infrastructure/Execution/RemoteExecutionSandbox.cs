@@ -113,6 +113,25 @@ public sealed class RemoteExecutionSandbox(
                     Reason: "RUNNER_INVALID_RESPONSE");
             }
 
+            if (!payload.Available &&
+                payload.ExitCode is null &&
+                payload.DurationMs == 0 &&
+                string.IsNullOrWhiteSpace(payload.Stdout) &&
+                string.IsNullOrWhiteSpace(payload.Stderr) &&
+                string.IsNullOrWhiteSpace(payload.Reason))
+            {
+                return new ExecutionResult(
+                    Available: false,
+                    Success: false,
+                    ExitCode: null,
+                    StandardOutput: string.Empty,
+                    StandardError:
+                        $"Runner returned HTTP {(int)response.StatusCode} with an unexpected 2xx body. Body: {rawBody}",
+                    DurationMs: 0,
+                    TimedOut: false,
+                    Reason: "RUNNER_UNEXPECTED_RESPONSE");
+            }
+
             return new ExecutionResult(
                 payload.Available,
                 payload.Success,
