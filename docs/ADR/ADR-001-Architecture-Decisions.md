@@ -1,9 +1,9 @@
 # Architecture Decision Records
 ## Multi-Agent Coding Agent
 
-**Version:** 1.0  
-**Status:** Accepted / In Progress  
-**Date:** 2026-10-03
+**Version:** 2.0  
+**Status:** Accepted / Implemented  
+**Date:** 2026-10-09
 
 ---
 
@@ -12,142 +12,168 @@
 ## Status
 Accepted
 
-## Context
-The system is a multi-agent coding assistant. The project requires distinct responsibilities for Planner, Coder, Tester/Reviewer and Fixer.
-
 ## Decision
-Use a hybrid architecture:
+Use n8n for orchestration and ASP.NET Core for stateful backend responsibilities.
 
 ```text
 User
-  ↓
+ ↓
 n8n
-  ├── Planner
-  ├── Human-in-the-loop
-  ├── Coder
-  ├── Tester / Reviewer
-  ├── Fixer
-  └── Final Report
-  ↓
-ASP.NET Core API
-  ├── OpenAI Integration
-  ├── State Management
-  ├── Workspace Management
-  ├── File Management
-  └── Execution Abstraction
+ ↓
+CodingAgent.Api
+ ├── Agents
+ ├── State
+ ├── Workspace
+ ├── Reporting
+ ├── ILlmService
+ └── IExecutionSandbox
 ```
 
-n8n is responsible for workflow orchestration. ASP.NET Core provides backend APIs, state, OpenAI integration and project/workspace services.
+n8n routes steps; backend state is the source of truth.
 
 ---
 
-# ADR-002 — n8nir.ir as n8n Runtime
+# ADR-002 — Durable Human-in-the-loop
 
 ## Status
 Accepted
 
 ## Decision
-Use `n8nir.ir` as the n8n execution environment.
-
-All workflows will be delivered as importable JSON files.
-
-Secrets and environment-specific values must not be hard-coded into workflow JSON.
-
----
-
-# ADR-003 — ASP.NET Core and C#
-
-## Status
-Accepted
-
-## Decision
-Implement the backend using ASP.NET Core and C#.
-
-Proposed solution structure:
+Human review occurs after planning using durable state/resume rather than a long-running n8n Wait node.
 
 ```text
-CodingAgent.sln
+Planner
+ ↓
+WaitingForHuman
+ ↓
+workflow ends
 
+Human review
+ ↓
+same ExecutionId resumes
+```
+
+---
+
+# ADR-003 — ASP.NET Core / C# / .NET 9
+
+## Status
+Accepted
+
+## Decision
+Implement backend services and Runner using ASP.NET Core and C# targeting .NET 9.
+
+Solution structure:
+
+```text
 src/
  ├── CodingAgent.Api
  ├── CodingAgent.Application
  ├── CodingAgent.Domain
- └── CodingAgent.Infrastructure
-
-tests/
- ├── CodingAgent.UnitTests
- └── CodingAgent.IntegrationTests
+ ├── CodingAgent.Infrastructure
+ └── CodingAgent.Runner
 ```
 
 ---
 
-# ADR-004 — Windows Hosting is API-only
+# ADR-004 — Separate Agent API and Runner
 
 ## Status
-Accepted
+Accepted / Implemented
 
 ## Context
-The available Windows host can run the published ASP.NET Core application and expose HTTP APIs, but does not provide Docker, shell execution, Process.Start, dotnet build or dotnet test.
+The system requires actual execution of generated code.
 
 ## Decision
-Use Windows Hosting only for ASP.NET Core API hosting.
+Keep orchestration/business logic in CodingAgent.Api and execute generated code in a separate CodingAgent.Runner application.
 
-No business logic may depend on arbitrary process execution on this host.
+```text
+CodingAgent.Api
+    │
+    ▼
+IExecutionSandbox
+    │
+    ▼
+RemoteExecutionSandbox
+    │ HTTPS
+    ▼
+CodingAgent.Runner
+```
+
+This separation reduces coupling and allows replacing the Runner later.
 
 ---
 
-# ADR-005 — Execution Sandbox is an unresolved dependency
+# ADR-005 — Execution Abstraction
 
 ## Status
-Open / Blocked
-
-## Context
-The project requires actual execution of generated code, but currently no Docker host, sandbox, VPS or remote code runner is available.
+Accepted / Implemented
 
 ## Decision
-Keep code execution behind this abstraction:
+Code execution must remain behind:
 
 ```csharp
 public interface IExecutionSandbox
 {
     Task<ExecutionResult> ExecuteAsync(
-        ExecutionRequest request,
+        Guid executionId,
+        IReadOnlyCollection<ProjectFile> files,
+        string command,
+        int timeoutSeconds,
         CancellationToken cancellationToken = default);
 }
 ```
 
-Current concrete implementation: **None**.
+Concrete implementations:
 
-This is the primary blocker for full compliance with the project requirement for real code execution.
+```text
+UnavailableExecutionSandbox
+RemoteExecutionSandbox
+```
+
+The current production-like MVP uses `RemoteExecutionSandbox`.
 
 ---
 
-# ADR-006 — OpenAI as LLM Provider
+# ADR-006 — Configurable LLM Provider
 
 ## Status
-Accepted
+Accepted / Implemented
 
 ## Decision
-OpenAI will be the LLM provider.
+Agent business logic depends only on `ILlmService`.
 
-Agent business logic must depend on an abstraction:
-
-```csharp
-public interface ILlmService
-{
-    Task<LlmResponse> GenerateAsync(
-        LlmRequest request,
-        CancellationToken cancellationToken = default);
-}
+```text
+ILlmService
+ ├── OpenAiLlmService
+ └── AifaLlmService
 ```
 
-The model name must be configuration-driven:
+Provider selection is configuration-driven.
+
+OpenAI config:
 
 ```json
 {
-  "AI": {
-    "Provider": "OpenAI",
-    "Model": "luna-5.6-gpt"
+  "AI": { "Provider": "OpenAI" },
+  "OpenAI": {
+    "BaseUrl": "https://api.openai.com/v1/",
+    "Model": "gpt-5.6-sol",
+    "ApiKey": ""
+  }
+}
+```
+
+AIFA config:
+
+```json
+{
+  "AI": { "Provider": "Aifa" },
+  "Aifa": {
+    "BaseUrl": "https://aifa-chatbot.dev.dotin.ir/",
+    "Model": "assistance-model",
+    "Token": "",
+    "UserId": "coding-agent"
   }
 }
 ```
@@ -160,102 +186,89 @@ The model name must be configuration-driven:
 Accepted
 
 ### Planner
-- Understand requirement
-- Break requirement into steps
-- Identify ambiguities
-- Generate implementation plan
-- Decide whether human review is required
+- understand requirement
+- produce implementation plan
+- identify assumptions and ambiguities
 
 ### Coder
-- Generate project structure
-- Generate files
-- Apply approved plan
-- Modify files
+- generate complete project files
+- generate automated xUnit tests
+- follow approved plan and human feedback
 
-### Tester / Reviewer
-- Analyze execution result
-- Analyze compilation/runtime/test errors
-- Determine success/failure
+### Reviewer
+- inspect actual execution result
+- classify issues
+- return `complete`, `fix` or `fail`
 
 ### Fixer
-- Analyze current and previous failures
-- Create corrective changes
-- Avoid repeating unsuccessful fixes
+- inspect current files, errors and previous attempts
+- apply corrective changes
+- avoid repeating failed fixes
 
 ---
 
-# ADR-008 — Human-in-the-loop after Planning
+# ADR-008 — Persist State Between Steps
 
 ## Status
-Accepted
+Accepted / Implemented
 
 ## Decision
+Persist state through `IAgentRunRepository`.
+
+MVP storage:
 
 ```text
-Planner
-   ↓
-Human Review
-   ↓
-Coder
+App_Data/agent-runs
 ```
 
-Human reviewer can:
-- Approve
-- Reject
-- Modify
-- Add feedback
-
-Future enhancement: smart human stop only when ambiguity exists.
+Persisted data includes request, plan, human feedback, files, attempts, review results, fix count and deadline.
 
 ---
 
-# ADR-009 — Persist State Between Steps
+# ADR-009 — Physical Workspace per ExecutionId
 
 ## Status
-Accepted
+Accepted / Implemented
 
-State must include at least:
+Agent API workspace:
 
 ```text
-ExecutionId
-User Request
-Plan
-Human Feedback
-Generated Files
-Code Versions
-Execution Attempts
-Previous Errors
-Fix Attempt Count
-Final Result
+App_Data/workspaces/{executionId:N}
 ```
 
-State will be managed by the ASP.NET Core backend.
+Runner workspace:
+
+```text
+RunnerData/workspaces/{executionId:N}
+```
+
+All generated file paths are validated as relative paths and path traversal is rejected.
 
 ---
 
 # ADR-010 — Maximum Three Fix Attempts
 
 ## Status
-Accepted
+Accepted / Implemented
 
 ```text
 MaxFixAttempts = 3
 ```
 
-After the third failed correction, the system must stop and generate a controlled failure report.
+The backend owns the counter.
 
 ---
 
 # ADR-011 — Maximum Run Duration
 
 ## Status
-Accepted
+Accepted / Implemented
 
 ```text
 MaxRunDuration = 15 minutes
 ```
 
-Each run must track StartedAt and Deadline.
+Each run records StartedAt and Deadline.
 
 ---
 
@@ -264,201 +277,190 @@ Each run must track StartedAt and Deadline.
 ## Status
 Accepted
 
-Agents must return machine-readable structured output.
-
-Planner example:
-
-```json
-{
-  "goal": "Create Todo API",
-  "steps": [],
-  "ambiguities": [],
-  "requiresHumanReview": true
-}
-```
-
-Coder example:
-
-```json
-{
-  "files": [
-    {
-      "path": "Program.cs",
-      "content": "..."
-    }
-  ]
-}
-```
+Planner, Coder, Reviewer and Fixer outputs are machine-readable JSON and validated before use.
 
 ---
 
-# ADR-013 — Workspace Isolation by ExecutionId
+# ADR-013 — n8n and Backend Communicate Through HTTP APIs
 
 ## Status
-Accepted
+Accepted / Implemented
 
-Every run receives a unique `ExecutionId`.
+No shared local filesystem between n8n and backend is assumed.
 
-Logical workspace:
+Communication is through HTTPS/JSON APIs.
+
+---
+
+# ADR-014 — Deterministic Runner Command Allowlist
+
+## Status
+Accepted / Implemented
+
+Runner accepts only:
 
 ```text
-/workspaces/{executionId}
+dotnet restore
+dotnet build
+dotnet test
 ```
 
-Files, attempts, errors and reports belong to that run.
+Arbitrary shell commands are not accepted by the public execution contract.
 
 ---
 
-# ADR-014 — n8n and Backend communicate through HTTP APIs
+# ADR-015 — Test Target Resolution
 
 ## Status
-Accepted
+Accepted / Implemented
 
-n8n and ASP.NET Core run in different environments.
+Before `dotnet test`, Runner resolves a solution or test project.
 
-No shared local filesystem is assumed.
-
-All communication is through HTTPS/JSON APIs.
-
----
-
-# ADR-015 — Controlled Failure
-
-## Status
-Accepted
-
-A failed run must still produce a report containing:
-- Completed steps
-- Generated files
-- Execution attempts
-- Errors
-- Fix attempts
-- Failure reason
-
----
-
-# ADR-016 — Markdown Report
-
-## Status
-Accepted
-
-Use Markdown as the initial report format.
-
-Default report name:
+If no target exists:
 
 ```text
-execution-report.md
+TEST_PROJECT_NOT_FOUND
 ```
 
----
-
-# ADR-017 — GitHub Integration is post-MVP
-
-## Status
-Accepted
-
-GitHub branch/commit/PR automation is valuable but not required for the first MVP.
-
-It will be implemented after the core agent flow works.
+For tests, Runner restores first and then executes `dotnet test --no-restore`.
 
 ---
 
-# ADR-018 — MVP Scope: ASP.NET Core projects
+# ADR-016 — Persistent NuGet Cache
 
 ## Status
-Accepted
+Accepted / Implemented
 
-The initial agent supports small ASP.NET Core Web API projects only.
-
-Primary demo target:
+NuGet packages are stored outside per-execution workspaces:
 
 ```text
-Todo REST API
+RunnerData/nuget-packages
 ```
+
+Reason: execution workspaces are recreated, so package cache must not live inside a disposable workspace.
+
+---
+
+# ADR-017 — Controlled Failure and Final Report
+
+## Status
+Accepted / Implemented
+
+Failed, timed-out and successful runs can produce a final Markdown report.
+
+Report includes:
+- request
+- plan
+- human feedback
+- generated files
+- execution attempts
+- stdout/stderr
+- reviewer result
+- fix history
+- final status
+
+---
+
+# ADR-018 — API Key Authentication
+
+## Status
+Accepted / Implemented
+
+Agent API:
+
+```http
+X-Agent-Api-Key: <secret>
+```
+
+Runner:
+
+```http
+X-Runner-Api-Key: <secret>
+```
+
+Credentials are read from deployment configuration.
+
+---
+
+# ADR-019 — Swagger for Both APIs
+
+## Status
+Accepted / Implemented
+
+Swagger is exposed for both applications:
+
+```text
+https://n8n-agent.samanooqazvin.com/swagger
+https://n8n-runner.samanooqazvin.com/swagger
+```
+
+Swagger defines the relevant API-key headers.
+
+---
+
+# ADR-020 — Runner is Not a Hardened Sandbox
+
+## Status
+Accepted
+
+## Context
+Generated code is untrusted and build/test execution may execute code.
+
+## Decision
+The current Windows Runner is acceptable for the course MVP but must not be described as a hardened sandbox.
+
+Operational controls:
+- separate application/site
+- low-privilege app-pool identity
+- no production secrets
+- writable access limited to Runner data
+- command allowlist
+- timeout
+- controlled workspace
+
+A stronger production design would use an isolated container/VM/sandbox.
+
+---
+
+# ADR-021 — GitHub Automation is Post-MVP
+
+## Status
+Accepted
+
+Automated branch/commit/PR publication is optional and outside the core validated flow.
 
 ---
 
 # Current Architecture Baseline
 
 ```text
-n8n Runtime: n8nir.ir
-Backend: ASP.NET Core
+Orchestration: n8n
+Backend: CodingAgent.Api / ASP.NET Core
+Runner: CodingAgent.Runner / ASP.NET Core
 Language: C#
-LLM: OpenAI
-Hosting: Windows Hosting
-Workflow Delivery: Importable n8n JSON
-State: ASP.NET Core backend
-Human-in-the-loop: n8n
-Execution Sandbox: Not currently available
+Target: .NET 9
+LLM: OpenAI or AIFA
+State: JSON file-backed repository
+Human-in-the-loop: durable state/resume
+Execution: RemoteExecutionSandbox
+Real restore/build/test: implemented
 Max Fix Attempts: 3
 Max Run Time: 15 minutes
 Report: Markdown
+Swagger: Agent + Runner
 MVP Target: ASP.NET Core Todo API
 ```
 
+# Validation Evidence
 
----
-
-# ADR-019 — File-backed State Persistence for MVP
-
-## Status
-Accepted
-
-## Context
-The Windows host can run the ASP.NET Core API, but no external database has been selected yet. In-memory state would be lost whenever the application restarts.
-
-## Decision
-Use a JSON file-backed implementation of `IAgentRunRepository` for the MVP.
-
-Default path:
+Validated run:
 
 ```text
-App_Data/agent-runs
+ExecutionId: fc30d504-9248-4413-81ee-f0e200a96c4a
+Status: Completed
+Build: successful
+Tests Passed: 3
+Tests Failed: 0
+Reviewer nextAction: complete
+Fix Attempts: 0
 ```
-
-Each run is persisted by `ExecutionId`.
-
-Application services explicitly call `SaveAsync` after state transitions.
-
-## Consequences
-
-### Positive
-- survives application restarts
-- no external database dependency
-- works with current Windows-host deployment model
-- repository abstraction allows later migration to SQL Server/PostgreSQL
-
-### Negative
-- Windows host must allow write access to the persistence directory
-- intended for a single application instance
-- concurrent updates use process-local locking rather than distributed transactions
-
----
-
-# ADR-020 — API Key Authentication between n8n and Backend
-
-## Status
-Accepted
-
-## Context
-The ASP.NET Core endpoints will be reachable over the internet from n8nir.ir and must not be callable anonymously.
-
-## Decision
-Protect all `/api/*` endpoints using:
-
-```http
-X-Agent-Api-Key
-```
-
-The secret is read primarily from:
-
-```text
-AGENT_API_KEY
-```
-
-The health endpoint remains anonymous.
-
-The API key is never committed to GitHub or embedded in exported n8n workflow JSON.
-
-## Future
-The API-key mechanism can later be replaced with stronger service-to-service authentication without changing Agent domain logic.
